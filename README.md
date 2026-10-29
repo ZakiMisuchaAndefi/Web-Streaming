@@ -58,6 +58,7 @@ Tekan `Ctrl+C` di jendela PowerShell untuk menghentikan server.
 | --- | --- |
 | `GET /api/health` | Status `yt-dlp`, `ffmpeg`, `mp3`, dan unduhan. |
 | `GET /api/resolve?id=VIDEO_ID&quality=high` | URL audio langsung dari YouTube (di-cache per video + kualitas). |
+| `GET /api/stream?id=VIDEO_ID&quality=high` | Memulai stream berdasarkan ID; URL YouTube diselesaikan setelah browser memulai permintaan audio. |
 | `GET /api/radio?id=VIDEO_ID` | Daftar lagu radio YouTube untuk lagu terkait. |
 | `GET /api/download?id=VIDEO_ID&quality=best&title=...` | Memulai job unduhan latar; mengembalikan `jobId`. |
 | `GET /api/download-status?job=JOB_ID` | Status job: `running`, `done`, atau `error`. |
@@ -154,7 +155,7 @@ Umum:
 
 ### Kenapa bukan YouTube Data API atau Spotify?
 
-Pemutaran YouTube di aplikasi ini memakai **resolver lokal `yt-dlp.exe`** yang dijalankan `server.ps1` (hanya mendengarkan di `127.0.0.1`), lalu URL audio hasilnya diputar dengan elemen `<audio>`. Aplikasi ini untuk **pemakaian pribadi di localhost**; tidak ada server Node/npm — semuanya PowerShell 5.1, HTML, CSS, dan JavaScript. Pencarian kata kunci melalui API publik Piped, bukan YouTube Data API, sehingga **tanpa API key sama sekali dan tanpa tampilan video**.
+Pemutaran YouTube di aplikasi ini memakai **resolver lokal `yt-dlp.exe`** yang dijalankan `server.ps1` (hanya mendengarkan di `127.0.0.1`). Browser langsung memulai permintaan elemen `<audio>` ke endpoint stream; server menyelesaikan URL audio YouTube di belakangnya agar pemanggilan putar tetap berada dalam gestur pengguna. Aplikasi ini untuk **pemakaian pribadi di localhost**; tidak ada server Node/npm — semuanya PowerShell 5.1, HTML, CSS, dan JavaScript. Pencarian kata kunci melalui API publik Piped, bukan YouTube Data API, sehingga **tanpa API key sama sekali dan tanpa tampilan video**.
 
 Pemutaran Spotify penuh juga memerlukan akun **Spotify Premium**, OAuth, dan Spotify Web Playback SDK — arsitektur yang berbeda dari pemutar `<audio>` ini.
 

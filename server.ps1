@@ -91,6 +91,17 @@ function Send-Json($stream, $status, $reason, $payload, $headOnly) {
   Send-Response $stream $status $reason "application/json; charset=utf-8" $bytes $headOnly
 }
 
+function Send-Redirect($stream, $url) {
+  $header = "HTTP/1.1 302 Found`r`n" +
+    "Location: $url`r`n" +
+    "Content-Length: 0`r`n" +
+    "Cache-Control: no-store`r`n" +
+    "Connection: close`r`n`r`n"
+  $headerBytes = [System.Text.Encoding]::ASCII.GetBytes($header)
+  $stream.Write($headerBytes, 0, $headerBytes.Length)
+  $stream.Flush()
+}
+
 function Get-QueryValue($query, $name) {
   if ([string]::IsNullOrEmpty($query)) { return $null }
   foreach ($pair in $query.Split("&")) {
@@ -520,6 +531,41 @@ try {
         $available = Test-Path -LiteralPath $script:ytdlpPath -PathType Leaf
         $hasFfmpeg = -not [string]::IsNullOrEmpty($script:ffmpegPath)
         Send-Json $stream 200 "OK" @{ ytdlp = $available; ffmpeg = $hasFfmpeg; mp3 = ($available -and $hasFfmpeg); downloads = $available } $headOnly
+      } elseif ($path -eq "/api/stream" -and ( $method -eq "GET" -or $headOnly) -and (Get-QueryValue $rawQuery "id")) {
+        $videoId = Get-QueryValue $rawQuery "id"
+        $quality = Get-QueryValue $rawQuery "quality"
+        if ([string]::IsNullOrEmpty($quality) -or $quality -notin @("low", "medium", "high", "best")) {
+          $quality = "best"
+        }
+        if ($videoId -notmatch '^[A-Za-z0-9_-]{11}$') {
+          Send-Json $stream 400 "Bad Request" @{ error = "ID video tidak valid" } $headOnly
+        } else {
+          $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+          $cacheKey = $videoId + "|" + $quality
+          $cached = $script:audioCache[$cacheKey]
+          if (-not ($cached -and [int64]$cached.Expires -gt ($now + 300))) {
+            $resolved = Invoke-YtDlp $videoId $quality
+            if ($resolved.Status -eq 200) {
+              $cached = @{ Url = $resolved.Url; Expires = [int64]$resolved.Expires }
+              $script:audioCache[$cacheKey] = $cached
+            } else {
+              $status = if ($resolved.Status -eq 503) { 503 } else { 502 }
+              $reason = if ($status -eq 503) { "Service Unavailable" } else { "Bad Gateway" }
+              Send-Json $stream $status $reason @{ error = $resolved.Error } $headOnly
+              $cached = $null
+            }
+          }
+          if ($cached) {
+            $audioUri = $null
+            if ([Uri]::TryCreate([string]$cached.Url, [UriKind]::Absolute, [ref]$audioUri) -and
+                $audioUri.Scheme -eq "https" -and
+                ($audioUri.Host -eq "googlevideo.com" -or $audioUri.Host.EndsWith(".googlevideo.com", [StringComparison]::OrdinalIgnoreCase))) {
+              Send-Redirect $stream $cached.Url
+            } else {
+              Send-Json $stream 502 "Bad Gateway" @{ error = "yt-dlp mengembalikan URL audio yang tidak valid" } $headOnly
+            }
+          }
+        }
       } elseif ($path -eq "/api/resolve" -and $method -eq "GET") {
         $videoId = Get-QueryValue $rawQuery "id"
         $quality = Get-QueryValue $rawQuery "quality"

@@ -342,7 +342,6 @@
   const relatedCache = new Map();
   const RELATED_TTL = 15 * 60 * 1000;
   let resolverCheck = null;
-  let resolverAvailable = null;
 
   function checkLocalResolver() {
     if (resolverCheck) return resolverCheck;
@@ -351,7 +350,6 @@
       .then((data) => !!(data && data.ytdlp))
       .catch(() => false)
       .then((available) => {
-        resolverAvailable = available;
         if (!available) resolverCheck = null; // jangan simpan hasil gagal, coba lagi nanti
         return available;
       });
@@ -361,6 +359,18 @@
   function audioQuality() {
     const value = AM.Library ? AM.Library.getSetting("streamQuality", "high") : "high";
     return ["low", "medium", "high", "best"].includes(value) ? value : "high";
+  }
+
+  function audioStreamUrl(videoId) {
+    const id = String(videoId || "").trim();
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return "";
+    return (
+      (window.API_BASE || "") +
+      "/api/stream?id=" +
+      encodeURIComponent(id) +
+      "&quality=" +
+      encodeURIComponent(audioQuality())
+    );
   }
 
   function clearAudioCache() {
@@ -388,9 +398,6 @@
     if (audioInflight.has(cacheKey)) return audioInflight.get(cacheKey);
 
     const task = (async () => {
-      const available = await checkLocalResolver();
-      if (!available) return null;
-
       try {
         const response = await fetchWithTimeout(
           (window.API_BASE || "") + "/api/resolve?id=" +
@@ -755,6 +762,7 @@
     titlesSimilar,
     resolve,
     resolveAudio,
+    audioStreamUrl,
     clearAudioCache,
     related,
     checkLocalResolver,

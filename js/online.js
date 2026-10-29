@@ -286,6 +286,8 @@
 
     prefetchWorker();
     prefetchWorker();
+    prefetchWorker();
+    prefetchWorker();
   }
 
   function cachedResult(provider, query) {

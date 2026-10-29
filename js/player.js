@@ -970,15 +970,12 @@
     state.isPlaying = false;
 
     if (track.provider === "youtube" && AM.Youtube) {
-      let audioSource = null;
-      try {
-        audioSource = await resolveYoutubeAudio(track, token, trackId);
-      } catch (error) {
-        audioSource = null;
-      }
-      if (token !== state.loadToken || state.currentId !== trackId) return;
-
-      if (!audioSource) {
+      const sourceId = track.audioVideoId || track.sourceId;
+      const streamUrl =
+        typeof AM.Youtube.audioStreamUrl === "function"
+          ? AM.Youtube.audioStreamUrl(sourceId)
+          : "";
+      if (!streamUrl) {
         state.loadingTrackId = null;
         state.pendingPlay = false;
         emit("error", {
@@ -992,17 +989,18 @@
         return;
       }
 
-      // Mode audio: lagu YouTube diputar seperti lagu lokal, tanpa video.
-      track.audioVideoId = audioSource.videoId;
+      // Start the media request in the user gesture before the server resolves the stream.
+      track.audioVideoId = sourceId;
       track.audioRetried = false;
-      audio.src = audioSource.url;
+      audio.src = streamUrl;
       audio.load();
       state.loadedTrackId = trackId;
       state.loadingTrackId = null;
       updateMediaSession(track);
-      if (state.pendingPlay) {
+      const playRequest = state.pendingPlay ? audio.play() : null;
+      if (playRequest) {
         try {
-          await audio.play();
+          await playRequest;
         } catch (error) {
           if (token !== state.loadToken || state.currentId !== trackId) return;
           state.pendingPlay = false;

@@ -6,7 +6,18 @@ const lib = require("./_lib");
 const CHUNK = 2 * 1024 * 1024;
 
 module.exports = async (req, res) => {
-  const target = String(req.query.u || "");
+  let target = String(req.query.u || "");
+  const videoId = String(req.query.id || "");
+  if (videoId) {
+    if (!lib.ID.test(videoId)) return res.status(400).send("ID video tidak valid");
+    try {
+      const quality = lib.qualityOf(req.query.quality);
+      const entry = await lib.getAudioUrl(videoId, quality);
+      target = entry.url;
+    } catch (e) {
+      return res.status(502).json({ error: e.message });
+    }
+  }
   if (!lib.isAllowed(target)) return res.status(400).send("URL tidak valid");
 
   const m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ""));
