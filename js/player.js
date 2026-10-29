@@ -23,6 +23,9 @@
     currentTime: 0,
     context: { type: "library", label: "" },
     loadToken: 0,
+    loadingTrackId: null,
+    loadedTrackId: null,
+    pendingPlay: false,
     markedId: null,
     seeking: false,
     radioLoading: "",
@@ -947,6 +950,12 @@
     state.currentId = trackId;
     state.loadToken += 1;
     const token = state.loadToken;
+    state.loadingTrackId = trackId;
+    state.loadedTrackId = null;
+    state.pendingPlay = !!autoplay;
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
     state.markedId = null;
     state.historyRecordedId = null;
     state.currentTime = startAt;
@@ -958,7 +967,6 @@
     emit("time", { currentTime: startAt, duration: state.duration, buffered: 0 });
     if (!state.restoring) writeSnapshot(true);
 
-    audio.pause();
     state.isPlaying = false;
 
     if (track.provider === "youtube" && AM.Youtube) {
@@ -971,12 +979,8 @@
       if (token !== state.loadToken || state.currentId !== trackId) return;
 
       if (!audioSource) {
-        audio.removeAttribute("src");
-        try {
-          audio.load();
-        } catch (error) {
-          /* Abaikan. */
-        }
+        state.loadingTrackId = null;
+        state.pendingPlay = false;
         emit("error", {
           track,
           error: new Error("Audio lagu YouTube tidak dapat diambil.")
@@ -993,11 +997,15 @@
       track.audioRetried = false;
       audio.src = audioSource.url;
       audio.load();
+      state.loadedTrackId = trackId;
+      state.loadingTrackId = null;
       updateMediaSession(track);
-      if (autoplay) {
+      if (state.pendingPlay) {
         try {
           await audio.play();
         } catch (error) {
+          if (token !== state.loadToken || state.currentId !== trackId) return;
+          state.pendingPlay = false;
           emit("blocked", { track, error });
           state.isPlaying = false;
           emit("statechange", getState());
@@ -1015,6 +1023,11 @@
         ? await AM.Online.getStreamURL(track)
         : await AM.Library.getAudioURL(trackId);
     } catch (error) {
+      if (token !== state.loadToken || state.currentId !== trackId) return;
+      if (token === state.loadToken) {
+        state.loadingTrackId = null;
+        state.pendingPlay = false;
+      }
       emit("error", { track, error });
       state.isPlaying = false;
       state.pendingSeek = null;
@@ -1027,12 +1040,16 @@
 
     audio.src = url;
     audio.load();
+    state.loadedTrackId = trackId;
+    state.loadingTrackId = null;
     updateMediaSession(track);
 
-    if (autoplay) {
+    if (state.pendingPlay) {
       try {
         await audio.play();
       } catch (error) {
+        if (token !== state.loadToken || state.currentId !== trackId) return;
+        state.pendingPlay = false;
         emit("blocked", { track, error });
         state.isPlaying = false;
         emit("statechange", getState());
@@ -1049,18 +1066,24 @@
       return;
     }
     const track = currentTrack();
-    if (!audio.src) {
-      loadCurrent(true);
+    const trackId = state.currentId;
+    const token = state.loadToken;
+    if (state.loadedTrackId !== state.currentId) {
+      state.pendingPlay = true;
+      if (state.loadingTrackId !== state.currentId) await loadCurrent(true);
       return;
     }
     try {
       await audio.play();
     } catch (error) {
+      if (token !== state.loadToken || state.currentId !== trackId) return;
+      state.pendingPlay = false;
       emit("blocked", { track, error });
     }
   }
 
   function pause() {
+    state.pendingPlay = false;
     audio.pause();
   }
 
@@ -1085,6 +1108,12 @@
 
   function stop() {
     audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    state.loadingTrackId = null;
+    state.loadedTrackId = null;
+    state.pendingPlay = false;
+    state.loadToken += 1;
     state.currentId = null;
     state.isPlaying = false;
     state.duration = 0;
@@ -1298,6 +1327,7 @@
     applyVolume();
 
     audio.addEventListener("play", () => {
+      state.pendingPlay = false;
       state.isPlaying = true;
       if (state.currentId && state.markedId !== state.currentId) {
         state.markedId = state.currentId;

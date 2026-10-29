@@ -1,7 +1,7 @@
 /* ==========================================================================
    online.js — musik online tanpa API key
    Sumber: YouTube — cari lagu dengan kata kunci, atau tempel tautan video.
-   Pemutaran memakai pemutar YouTube resmi (iframe), bukan ekstraksi audio.
+   Pemutaran memakai URL audio yang disiapkan yt-dlp melalui server aplikasi.
    ========================================================================== */
 
 (function (AM) {
@@ -24,6 +24,7 @@
     resultKey: "",
     lastUpdated: 0,
     token: 0,
+    audioPrefetchToken: 0,
     pending: null,
     controller: null
   };
@@ -255,12 +256,36 @@
     state.query = cleanQuery(query);
     state.mode = mode || (state.query ? "search" : "intro");
     state.results = list.slice();
+    prefetchFirstTrack(state.results);
     state.lastUpdated = Date.now();
     state.error = "";
     state.errorKind = "";
     state.status = "ready";
     rememberResultSet(state.provider, state.query, list);
     return snapshot();
+  }
+
+  function prefetchFirstTrack(list) {
+    if (!AM.Youtube) return;
+    const token = ++state.audioPrefetchToken;
+    const tracks = (list || [])
+      .slice(0, 10)
+      .filter((track) => track && track.sourceId);
+    let index = 0;
+
+    async function prefetchWorker() {
+      while (token === state.audioPrefetchToken && index < tracks.length) {
+        const track = tracks[index++];
+        try {
+          await AM.Youtube.resolveAudio(track.sourceId);
+        } catch (error) {
+          console.warn("[online] gagal menyiapkan audio:", error);
+        }
+      }
+    }
+
+    prefetchWorker();
+    prefetchWorker();
   }
 
   function cachedResult(provider, query) {
@@ -306,6 +331,7 @@
       return Promise.resolve(snapshot());
     }
 
+    state.audioPrefetchToken += 1;
     if (state.controller) {
       try {
         state.controller.abort();
@@ -380,6 +406,7 @@
         state.errorKind = "";
         state.lastUpdated = Date.now();
         state.results = list;
+        prefetchFirstTrack(list);
         rememberResultSet(nextProvider, nextQuery, list);
         if (cacheable) {
           cache.set(key, { at: Date.now(), tracks: list.slice() });

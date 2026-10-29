@@ -437,6 +437,14 @@
       }
     });
 
+    document.addEventListener("pointerover", (event) => {
+      const row = event.target.closest && event.target.closest(".track-row--online");
+      if (!row || row.contains(event.relatedTarget)) return;
+      const track = O.getTrack(row.dataset.trackId);
+      if (!track || !track.sourceId || !AM.Youtube) return;
+      AM.Youtube.resolveAudio(track.sourceId).catch(() => {});
+    });
+
     O.on("likeschange", (detail) => {
       if (detail && detail.id) updateLikeUI(detail.id);
       if (P.state.currentId === (detail && detail.id)) syncPlayerBar(P.getState());
