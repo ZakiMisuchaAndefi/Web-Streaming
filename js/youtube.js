@@ -346,12 +346,13 @@
 
   function checkLocalResolver() {
     if (resolverCheck) return resolverCheck;
-    resolverCheck = fetchWithTimeout("/api/health", 4000)
+    resolverCheck = fetchWithTimeout((window.API_BASE || "") + "/api/health", 45000)
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => !!(data && data.ytdlp))
       .catch(() => false)
       .then((available) => {
         resolverAvailable = available;
+        if (!available) resolverCheck = null; // jangan simpan hasil gagal, coba lagi nanti
         return available;
       });
     return resolverCheck;
@@ -392,11 +393,11 @@
 
       try {
         const response = await fetchWithTimeout(
-          "/api/resolve?id=" +
+          (window.API_BASE || "") + "/api/resolve?id=" +
             encodeURIComponent(id) +
             "&quality=" +
             encodeURIComponent(quality),
-          22000
+          45000
         );
         if (!response.ok) return null;
         const data = await response.json();
@@ -494,8 +495,8 @@
     if (available) {
       try {
         const response = await fetchWithTimeout(
-          "/api/radio?id=" + encodeURIComponent(id),
-          32000
+          (window.API_BASE || "") + "/api/radio?id=" + encodeURIComponent(id),
+          45000
         );
         if (response.ok) {
           const data = await response.json();

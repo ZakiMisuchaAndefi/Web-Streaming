@@ -46,7 +46,7 @@
     }
     if (healthTask) return healthTask;
 
-    healthTask = fetch("/api/health", { cache: "no-store" })
+    healthTask = fetch((window.API_BASE || "") + "/api/health", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         healthCache = {
@@ -99,14 +99,14 @@
     const status = await health();
     if (!status.ytdlp) {
       toast(
-        "yt-dlp tidak tersedia. Letakkan yt-dlp.exe di folder aplikasi lalu jalankan ulang server.",
+        "yt-dlp tidak tersedia di server. Coba lagi beberapa saat.",
         { type: "error", duration: 9000 }
       );
       return null;
     }
     if (!status.ffmpeg) {
       toast(
-        "Unduhan MP3 membutuhkan ffmpeg.exe. Letakkan ffmpeg.exe di folder aplikasi lalu jalankan ulang server.",
+        "Unduhan MP3 hanya tersedia di versi lokal (butuh ffmpeg.exe).",
         { type: "error", duration: 9000 }
       );
       return null;
@@ -125,7 +125,7 @@
         quality,
         title: track.title || "audio"
       });
-      const response = await fetch("/api/download?" + params.toString(), {
+      const response = await fetch((window.API_BASE || "") + "/api/download?" + params.toString(), {
         cache: "no-store"
       });
       const data = await response.json().catch(() => null);
@@ -137,7 +137,7 @@
       while (Date.now() - startedAt < MAX_WAIT) {
         await sleep(POLL_INTERVAL);
         const statusResponse = await fetch(
-          "/api/download-status?job=" + encodeURIComponent(data.jobId),
+          (window.API_BASE || "") + "/api/download-status?job=" + encodeURIComponent(data.jobId),
           { cache: "no-store" }
         );
         const payload = await statusResponse.json().catch(() => null);
@@ -145,7 +145,7 @@
 
         if (payload.status === "done" && payload.url) {
           const file = {
-            url: payload.url,
+            url: (window.API_BASE || "") + payload.url,
             name: payload.name || track.title + ".mp3"
           };
           saveFile(file.url, file.name);
