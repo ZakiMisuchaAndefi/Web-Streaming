@@ -1,0 +1,969 @@
+/* ==========================================================================
+   responsive.css — adaptasi layar kecil dan menengah
+   ========================================================================== */
+
+@media (max-width: 1280px) {
+  :root {
+    --sidebar-width: 252px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+    gap: 22px 16px;
+  }
+
+  .grid--mixes {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  }
+
+  .hero {
+    grid-template-columns: minmax(0, 1fr) 264px;
+    gap: 30px;
+    padding: 34px 38px;
+  }
+
+  .artist-grid {
+    gap: 4px 16px;
+  }
+}
+
+@media (max-width: 1120px) {
+  .volume {
+    width: 72px;
+  }
+
+  .player {
+    grid-template-columns: minmax(190px, 1fr) minmax(320px, 1.5fr) minmax(150px, 0.8fr);
+    gap: 12px;
+    padding: 0 18px;
+  }
+
+  .topbar {
+    padding: 0 20px;
+  }
+
+  .view {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (max-width: 1020px) {
+  .player {
+    grid-template-columns: minmax(170px, 1fr) minmax(300px, 1.5fr) auto;
+  }
+
+  .volume {
+    display: none;
+  }
+
+  .feature-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .detail-hero__inner {
+    padding: 34px 30px 28px;
+  }
+
+  .detail-hero__art {
+    width: 172px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Sidebar menjadi drawer
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  :root {
+    --topbar-height: 60px;
+  }
+
+  .app__shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 120;
+    width: 304px;
+    max-width: 86vw;
+    padding-top: 20px;
+    border-right: 1px solid var(--border);
+    box-shadow: 24px 0 80px rgba(0, 0, 0, 0.38);
+    transform: translateX(-104%);
+    transition: transform 300ms var(--ease-out);
+    visibility: hidden;
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  .sidebar__close {
+    display: inline-flex;
+  }
+
+  .topbar__menu {
+    display: inline-flex;
+  }
+
+  .topbar__history {
+    display: none;
+  }
+
+  .topbar__title {
+    padding-left: 2px;
+  }
+
+  .view {
+    padding: calc(var(--topbar-height) + 18px) 22px 54px;
+  }
+
+  .artist-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .hero {
+    grid-template-columns: minmax(0, 1fr) 238px;
+    padding: 30px 32px;
+    gap: 24px;
+  }
+
+  .hero h1 {
+    font-size: clamp(34px, 5vw, 48px);
+  }
+
+  .feature-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .queue-panel {
+    width: 360px;
+  }
+
+  .queue-panel.is-open {
+    box-shadow: -30px 0 90px rgba(0, 0, 0, 0.4);
+  }
+
+  .page-head {
+    margin-bottom: 22px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Tablet & tracklist
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .tracklist {
+    --tl-cols: 34px minmax(0, 1fr) minmax(90px, 0.72fr) 52px 32px 32px;
+  }
+
+  .tracklist .track-row__album,
+  .tracklist .tracklist__head .th-album {
+    display: none;
+  }
+
+  .tracklist--no-album {
+    --tl-cols: 34px minmax(0, 1fr) minmax(90px, 0.72fr) 52px 32px 32px;
+  }
+
+  .tracklist--no-artist,
+  .tracklist--title-only {
+    --tl-cols: 34px minmax(0, 1fr) 52px 32px 32px;
+  }
+
+  .track-row__like,
+  .track-row__more {
+    opacity: 1;
+  }
+
+  .grid--small {
+    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  }
+
+  .detail-hero__inner {
+    gap: 22px;
+    padding: 30px 26px 26px;
+  }
+
+  .detail-hero__art {
+    width: 148px;
+  }
+
+  .detail-hero__info h1 {
+    font-size: clamp(30px, 4.5vw, 44px);
+  }
+
+  .topbar__import span {
+    display: none;
+  }
+
+  .topbar__import {
+    width: 32px;
+    padding: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Ponsel
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 700px) {
+  :root {
+    --player-height: 80px;
+    --topbar-height: 58px;
+  }
+
+  .view {
+    padding: calc(var(--topbar-height) + 14px) 16px 46px;
+    scrollbar-gutter: auto;
+  }
+
+  .topbar {
+    gap: 5px;
+    padding: 0 12px;
+  }
+
+  .topbar__actions {
+    gap: 2px;
+  }
+
+  .page-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .page-head__actions {
+    padding-bottom: 0;
+    flex-wrap: wrap;
+  }
+
+  .page-head h1 {
+    font-size: 30px;
+  }
+
+  .section {
+    margin-top: 32px;
+  }
+
+  .section__title {
+    font-size: 19px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 18px 13px;
+  }
+
+  .grid--mixes {
+    grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
+  }
+
+  .card__play {
+    opacity: 1;
+    transform: none;
+    width: 34px;
+    height: 34px;
+  }
+
+  .card__title {
+    font-size: 13px;
+  }
+
+  .card__sub {
+    font-size: 11.5px;
+  }
+
+  .mix-card__title {
+    font-size: 20px;
+  }
+
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 28px 24px;
+    min-height: 0;
+    border-radius: var(--radius-lg);
+  }
+
+  .hero__art-wrap {
+    display: none;
+  }
+
+  .hero h1 {
+    font-size: clamp(33px, 8.8vw, 44px);
+  }
+
+  .hero__desc {
+    font-size: 13px;
+  }
+
+  .hero__actions {
+    margin-top: 19px;
+  }
+
+  .detail-hero {
+    border-radius: var(--radius-lg);
+    margin-bottom: 22px;
+  }
+
+  .detail-hero__inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 17px;
+    padding: 24px 22px 22px;
+  }
+
+  .detail-hero__art {
+    width: 128px;
+    border-radius: 8px;
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.42);
+  }
+
+  .detail-hero__art--round {
+    border-radius: 50%;
+  }
+
+  .detail-hero__info {
+    width: 100%;
+  }
+
+  .detail-hero__info h1 {
+    font-size: clamp(29px, 7.5vw, 38px);
+  }
+
+  .detail-hero__type {
+    margin-bottom: 6px;
+  }
+
+  .detail-hero__desc {
+    font-size: 12.5px;
+  }
+
+  .detail-hero__actions {
+    margin-top: 17px;
+  }
+
+  .detail-hero__actions .btn {
+    height: 35px;
+    padding: 0 16px;
+    font-size: 13px;
+  }
+
+  .genre-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .tile {
+    min-height: 96px;
+    padding: 13px;
+  }
+
+  .tile__name {
+    font-size: 17px;
+  }
+
+  .station-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .station {
+    min-height: 132px;
+  }
+
+  .station__name {
+    font-size: 21px;
+    margin-top: 16px;
+  }
+
+  .empty {
+    min-height: 280px;
+    padding: 42px 20px;
+  }
+
+  .search-hero {
+    text-align: left;
+  }
+
+  .search-hero h1 {
+    font-size: 30px;
+  }
+
+  .search-box {
+    margin-top: 16px;
+  }
+
+  .search-chips {
+    justify-content: flex-start;
+  }
+
+  .search-results {
+    margin-top: 26px;
+  }
+
+  .artist-row {
+    padding: 7px 4px;
+  }
+
+  .artist-row__art {
+    width: 44px;
+    height: 44px;
+  }
+
+  .track-row {
+    min-height: 50px;
+  }
+
+  .tracklist__head {
+    min-height: 30px;
+  }
+
+  .tracklist__head > span:nth-child(5) {
+    font-size: 9.5px;
+  }
+
+  .queue-panel {
+    width: 100%;
+    border-left: 0;
+  }
+
+  .queue-panel__head {
+    padding: 20px 18px 13px;
+  }
+
+  .queue-panel__body {
+    padding: 8px 8px 16px;
+  }
+
+  .queue-panel__foot {
+    padding: 10px 18px 13px;
+  }
+
+  .toast-region {
+    right: 12px;
+    bottom: calc(var(--player-height) + 12px);
+    left: 12px;
+    align-items: stretch;
+    max-width: none;
+  }
+
+  .toast {
+    justify-content: center;
+  }
+
+  /* Player ringkas */
+  .player {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .player__now {
+    grid-column: 1;
+    grid-row: 1;
+    gap: 9px;
+    min-width: 0;
+  }
+
+  .player__art {
+    width: 46px;
+    height: 46px;
+    border-radius: 5px;
+  }
+
+  .player__meta {
+    max-width: 100%;
+  }
+
+  .player__title {
+    font-size: 12.5px;
+  }
+
+  .player__artist {
+    font-size: 11px;
+  }
+
+  .player__like,
+  .player__download,
+  .player__lyrics {
+    display: none;
+  }
+
+  .player__center {
+    grid-column: 2;
+    grid-row: 1;
+    display: block;
+    width: auto;
+    max-width: none;
+  }
+
+  .player__controls {
+    gap: 0;
+    height: 52px;
+  }
+
+  .player__ctl {
+    width: 29px;
+    height: 29px;
+  }
+
+  .player__skip {
+    width: 29px;
+    height: 29px;
+  }
+
+  #btnShuffle,
+  #btnRepeat {
+    display: none;
+  }
+
+  .player__play {
+    width: 38px;
+    height: 38px;
+    margin: 0 4px;
+  }
+
+  .player__right {
+    display: none;
+  }
+
+  .player__timeline {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    gap: 0;
+    z-index: 2;
+  }
+
+  .player__timeline .time {
+    display: none;
+  }
+
+  .seek {
+    height: 12px;
+    align-items: flex-start;
+  }
+
+  .seek__rail {
+    height: 2px;
+    border-radius: 0;
+  }
+
+  .seek:hover .seek__rail,
+  .seek.is-dragging .seek__rail,
+  .seek:focus-visible .seek__rail {
+    height: 3px;
+  }
+
+  .seek__buffer {
+    display: none;
+  }
+
+  .seek__thumb {
+    display: none;
+  }
+
+  .seek__fill {
+    background: var(--accent);
+  }
+
+  .drop-overlay__card {
+    min-height: 220px;
+    padding: 28px 22px;
+  }
+
+  .drop-overlay h2 {
+    font-size: 20px;
+  }
+
+  .modal-layer {
+    padding: 12px;
+    align-items: end;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: 88vh;
+    border-radius: 18px;
+  }
+
+  .modal__head {
+    padding: 19px 18px 0;
+  }
+
+  .modal__body {
+    padding: 17px 18px;
+  }
+
+  .modal__foot {
+    padding: 13px 18px 17px;
+  }
+}
+
+@media (max-width: 560px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 12px;
+  }
+
+  .grid--mixes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid--wide,
+  .grid--small {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .card__art {
+    border-radius: 7px;
+  }
+
+  .feature-strip {
+    gap: 9px;
+  }
+
+  .feature {
+    padding: 14px;
+  }
+
+  .topbar__title {
+    font-size: 12.5px;
+  }
+
+  .page-head__actions .btn {
+    height: 34px;
+    padding: 0 14px;
+    font-size: 12.5px;
+  }
+
+  .tracklist,
+  .tracklist--no-album,
+  .tracklist--no-artist,
+  .tracklist--title-only {
+    --tl-cols: 28px minmax(0, 1fr) 44px 30px 30px;
+    gap: 8px;
+    padding: 4px 4px;
+  }
+
+  .track-list-wrap {
+    margin: 0 -4px;
+  }
+
+  .tracklist .track-row__artist,
+  .tracklist .tracklist__head .th-artist {
+    display: none;
+  }
+
+  .tracklist__head {
+    padding: 0 4px;
+    gap: 8px;
+  }
+
+  .tracklist__head .th-time,
+  .tracklist__head .th-like,
+  .tracklist__head .th-more {
+    font-size: 9px;
+  }
+
+  .track-row__mobile-sub {
+    display: block;
+  }
+
+  .track-row__art {
+    width: 36px;
+    height: 36px;
+  }
+
+  .track-row__title-cell {
+    gap: 9px;
+  }
+
+  .track-row__name {
+    font-size: 13px;
+  }
+
+  .track-row__like,
+  .track-row__more {
+    width: 26px;
+    height: 26px;
+  }
+
+  .track-row__time {
+    font-size: 11px;
+  }
+
+  .empty {
+    padding: 34px 16px;
+    border-radius: var(--radius-md);
+  }
+
+  .empty__icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 13px;
+  }
+
+  .empty h2 {
+    font-size: 18px;
+  }
+
+  .empty__actions {
+    width: 100%;
+  }
+
+  .empty__actions .btn {
+    flex: 1;
+  }
+
+  .hero {
+    padding: 24px 20px;
+  }
+
+  .hero__eyebrow {
+    font-size: 10px;
+  }
+
+  .hero__actions .btn {
+    height: 36px;
+    padding: 0 16px;
+  }
+
+  .detail-hero__art {
+    width: 112px;
+  }
+
+  .detail-hero__meta {
+    font-size: 11.5px;
+  }
+
+  .search-hero h1 {
+    font-size: 27px;
+  }
+
+  .search-box__input {
+    height: 46px;
+    font-size: 14px;
+  }
+
+  .settings-row {
+    gap: 10px;
+  }
+
+  .segmented__btn {
+    padding: 0 8px;
+  }
+
+  .modal__foot {
+    flex-wrap: wrap;
+  }
+
+  .modal__foot .btn {
+    flex: 1;
+  }
+
+  .queue-panel {
+    bottom: var(--player-height);
+  }
+}
+
+@media (max-width: 420px) {
+  .topbar__title {
+    display: none;
+  }
+
+  .topbar__actions {
+    margin-left: auto;
+  }
+
+  .player__art {
+    width: 42px;
+    height: 42px;
+  }
+
+  .player__artist {
+    max-width: 130px;
+  }
+
+  .mix-card__title {
+    font-size: 18px;
+  }
+
+  .mix-card__foot {
+    font-size: 9.5px;
+  }
+
+  .grid {
+    gap: 16px 10px;
+  }
+
+  .station {
+    min-height: 120px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Musik online
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1020px) {
+  .online-hero {
+    grid-template-columns: minmax(0, 1fr) 180px;
+    padding: 34px 34px;
+  }
+
+  .online-hero__orb {
+    max-width: 180px;
+  }
+
+  .online-hero__orb .icon {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+@media (max-width: 700px) {
+  .online-hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 27px 24px;
+    border-radius: var(--radius-lg);
+  }
+
+  .online-hero__orb {
+    display: none;
+  }
+
+  .online-hero h1 {
+    font-size: clamp(33px, 8.5vw, 44px);
+  }
+
+  .online-hero__text {
+    font-size: 13px;
+  }
+
+  .online-hero__badges {
+    margin-top: 17px;
+  }
+
+  .online-search-panel {
+    margin-top: 12px;
+    padding: 12px;
+  }
+
+  .online-results {
+    margin-top: 27px;
+  }
+
+  .online-results__head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 13px;
+  }
+
+  .online-results__actions {
+    padding-bottom: 0;
+  }
+
+  .online-skeleton__row {
+    grid-template-columns: 40px minmax(0, 1fr) 80px;
+  }
+}
+
+@media (max-width: 560px) {
+  .online-hero {
+    padding: 24px 20px;
+  }
+
+  .online-hero h1 {
+    font-size: 32px;
+  }
+
+  .online-pill {
+    height: 26px;
+    padding: 0 9px;
+    font-size: 10.5px;
+  }
+
+  .online-skeleton__row {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 10px;
+    padding: 4px 4px;
+  }
+
+  .online-skeleton__art {
+    width: 36px;
+    height: 36px;
+  }
+
+  .online-skeleton__pill {
+    display: none;
+  }
+
+  .online-results__actions .btn {
+    flex: 1;
+  }
+
+  .online-results__refresh {
+    width: 100%;
+    margin-left: 0;
+    text-align: center;
+  }
+
+  .online-results__note {
+    font-size: 11.5px;
+  }
+
+  .online-suggestions {
+    width: 100%;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Perangkat sentuh
+   -------------------------------------------------------------------------- */
+
+@media (hover: none) {
+  .card__play {
+    opacity: 1;
+    transform: none;
+  }
+
+  .track-row__like,
+  .track-row__more {
+    opacity: 1;
+  }
+
+  .track-row__num {
+    opacity: 0;
+  }
+
+  .track-row__index-play {
+    opacity: 1;
+  }
+
+  .track-row.is-current .track-row__index-play {
+    display: none;
+  }
+
+  .artist-row__chev {
+    opacity: 0.5;
+  }
+
+  .queue-item__remove {
+    opacity: 0.7;
+  }
+}

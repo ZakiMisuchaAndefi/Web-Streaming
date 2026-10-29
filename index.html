@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#1f1f1f">
+  <title>Musik</title>
+  <meta name="description" content="Pemutar musik lokal bergaya Apple Music. Impor koleksi musikmu dan nikmati di browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff5a6e'/%3E%3Cstop offset='1' stop-color='%23fa2d48'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Cpath d='M25 43V23l19-3v19' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='21' cy='44' r='5' fill='white'/%3E%3Ccircle cx='40' cy='40' r='5' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/sidebar.css">
+  <link rel="stylesheet" href="css/content.css">
+  <link rel="stylesheet" href="css/player.css">
+  <link rel="stylesheet" href="css/overlays.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+  <a class="skip-link" href="#view">Lompat ke konten</a>
+
+  <div class="app" id="app">
+    <div class="app__shell">
+      <aside class="sidebar" id="sidebar" aria-label="Sidebar navigasi">
+        <div class="sidebar__brand">
+          <a class="brand" href="#/home" aria-label="Musik — Dengarkan Sekarang">
+            <span class="brand__mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v11.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="currentColor"/><circle cx="16.5" cy="15.5" r="2.5" fill="currentColor"/></svg>
+            </span>
+            <span class="brand__text">Musik</span>
+          </a>
+          <button class="icon-btn sidebar__close" id="sidebarClose" title="Tutup menu" aria-label="Tutup menu">
+            <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+          </button>
+        </div>
+
+        <button class="search-pill" id="sidebarSearch" type="button" aria-label="Cari musik">
+          <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
+          <span>Cari</span>
+          <kbd class="search-pill__kbd">⌘K</kbd>
+        </button>
+
+        <nav class="sidebar__nav" aria-label="Navigasi utama">
+          <ul class="nav-list">
+            <li>
+              <a class="nav-item" href="#/home" data-nav="home">
+                <svg class="icon" aria-hidden="true"><use href="#i-home"></use></svg>
+                <span>Dengarkan Sekarang</span>
+              </a>
+            </li>
+            <li>
+              <a class="nav-item" href="#/browse" data-nav="browse">
+                <svg class="icon" aria-hidden="true"><use href="#i-compass"></use></svg>
+                <span>Jelajahi</span>
+              </a>
+            </li>
+            <li>
+              <a class="nav-item" href="#/radio" data-nav="radio">
+                <svg class="icon" aria-hidden="true"><use href="#i-radio"></use></svg>
+                <span>Radio</span>
+              </a>
+            </li>
+            <li>
+              <a class="nav-item" href="#/settings" data-nav="settings">
+                <svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg>
+                <span>Pengaturan</span>
+              </a>
+            </li>
+          </ul>
+
+          <div class="nav-section">
+            <div class="nav-section__head">
+              <span>Perpustakaan</span>
+            </div>
+            <ul class="nav-list">
+              <li>
+                <a class="nav-item" href="#/recent" data-nav="recent">
+                  <svg class="icon" aria-hidden="true"><use href="#i-clock"></use></svg>
+                  <span>Riwayat</span>
+                </a>
+              </li>
+              <li>
+                <a class="nav-item" href="#/artists" data-nav="artists">
+                  <svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg>
+                  <span>Artis</span>
+                </a>
+              </li>
+              <li>
+                <a class="nav-item" href="#/albums" data-nav="albums">
+                  <svg class="icon" aria-hidden="true"><use href="#i-disc"></use></svg>
+                  <span>Album</span>
+                </a>
+              </li>
+              <li>
+                <a class="nav-item" href="#/songs" data-nav="songs">
+                  <svg class="icon" aria-hidden="true"><use href="#i-music"></use></svg>
+                  <span>Lagu</span>
+                </a>
+              </li>
+              <li>
+                <a class="nav-item" href="#/favorites" data-nav="favorites">
+                  <svg class="icon" aria-hidden="true"><use href="#i-heart"></use></svg>
+                  <span>Suka</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="nav-section nav-section--playlists">
+            <div class="nav-section__head">
+              <span>Playlist</span>
+              <button class="icon-btn icon-btn--tiny" id="sidebarNewPlaylist" type="button" title="Buat playlist" aria-label="Buat playlist">
+                <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+              </button>
+            </div>
+            <ul class="nav-list nav-list--playlists" id="sidebarPlaylists"></ul>
+          </div>
+        </nav>
+
+        <div class="sidebar__footer">
+          <button class="import-card" id="sidebarImport" type="button">
+            <span class="import-card__icon">
+              <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+            </span>
+            <span class="import-card__text">
+              <strong>Impor musik</strong>
+              <small>MP3, M4A, FLAC, WAV</small>
+            </span>
+            <svg class="icon import-card__chev" aria-hidden="true"><use href="#i-chevron-right"></use></svg>
+          </button>
+          <div class="sidebar__footer-row">
+            <button class="icon-btn" id="themeToggle" type="button" title="Ganti tema" aria-label="Ganti tema">
+              <svg class="icon" aria-hidden="true"><use href="#i-moon"></use></svg>
+            </button>
+            <span class="sidebar__storage" id="storageInfo">Penyimpanan lokal</span>
+          </div>
+        </div>
+      </aside>
+
+      <div class="sidebar-scrim" id="sidebarScrim" hidden></div>
+
+      <div class="main">
+        <header class="topbar">
+          <button class="icon-btn topbar__menu" id="menuBtn" type="button" title="Buka menu" aria-label="Buka menu">
+            <svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>
+          </button>
+
+          <div class="topbar__history">
+            <button class="icon-btn icon-btn--history" id="backBtn" type="button" title="Kembali" aria-label="Kembali" disabled>
+              <svg class="icon" aria-hidden="true"><use href="#i-chevron-left"></use></svg>
+            </button>
+            <button class="icon-btn icon-btn--history" id="forwardBtn" type="button" title="Maju" aria-label="Maju" disabled>
+              <svg class="icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg>
+            </button>
+          </div>
+
+          <div class="topbar__title" id="topbarTitle">Dengarkan Sekarang</div>
+
+          <div class="topbar__actions">
+            <button class="icon-btn topbar__search" id="topbarSearch" type="button" title="Cari" aria-label="Cari">
+              <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
+            </button>
+            <button class="icon-btn queue-toggle" id="topbarQueue" type="button" title="Antrean" aria-label="Buka antrean">
+              <svg class="icon" aria-hidden="true"><use href="#i-list"></use></svg>
+              <span class="queue-toggle__dot" aria-hidden="true"></span>
+            </button>
+            <button class="icon-btn lyrics-toggle" id="topbarLyrics" type="button" title="Lirik" aria-label="Buka lirik" aria-pressed="false">
+              <svg class="icon" aria-hidden="true"><use href="#i-lyrics"></use></svg>
+            </button>
+            <button class="btn btn--primary btn--small topbar__import" id="topbarImport" type="button" title="Impor musik" aria-label="Impor musik">
+              <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+              <span>Impor</span>
+            </button>
+          </div>
+        </header>
+
+        <main class="view" id="view" tabindex="-1" aria-live="polite"></main>
+      </div>
+    </div>
+
+    <footer class="player" id="player" aria-label="Pemutar musik">
+      <div class="player__now">
+        <button class="player__art" id="playerArtButton" type="button" title="Buka album" aria-label="Buka album yang sedang diputar" disabled>
+          <img id="playerArt" alt="" draggable="false">
+        </button>
+        <div class="player__meta">
+          <button class="player__title" id="playerTitle" type="button" title="Buka album" disabled>Tidak ada yang diputar</button>
+          <button class="player__artist" id="playerArtist" type="button" title="Buka artis" disabled>Pilih lagu dari perpustakaanmu</button>
+        </div>
+        <button class="icon-btn player__like" id="playerLike" type="button" title="Sukai" aria-label="Sukai lagu" aria-pressed="false" disabled>
+          <svg class="icon" aria-hidden="true"><use href="#i-heart"></use></svg>
+        </button>
+        <button class="icon-btn player__download" id="playerDownload" type="button" title="Unduh audio dari YouTube" aria-label="Unduh audio dari YouTube" disabled>
+          <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
+        </button>
+        <button class="icon-btn player__lyrics lyrics-toggle" id="btnLyrics" type="button" title="Lirik" aria-label="Buka lirik" aria-pressed="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-lyrics"></use></svg>
+        </button>
+      </div>
+
+      <div class="player__center">
+        <div class="player__controls">
+          <button class="icon-btn player__ctl" id="btnShuffle" type="button" title="Acak" aria-label="Acak" aria-pressed="false">
+            <svg class="icon" aria-hidden="true"><use href="#i-shuffle"></use></svg>
+          </button>
+          <button class="icon-btn player__ctl player__skip" id="btnPrev" type="button" title="Sebelumnya" aria-label="Lagu sebelumnya" disabled>
+            <svg class="icon" aria-hidden="true"><use href="#i-skip-back"></use></svg>
+          </button>
+          <button class="player__play" id="btnPlay" type="button" title="Putar" aria-label="Putar" disabled>
+            <svg class="icon" aria-hidden="true"><use href="#i-play"></use></svg>
+          </button>
+          <button class="icon-btn player__ctl player__skip" id="btnNext" type="button" title="Berikutnya" aria-label="Lagu berikutnya" disabled>
+            <svg class="icon" aria-hidden="true"><use href="#i-skip-forward"></use></svg>
+          </button>
+          <button class="icon-btn player__ctl" id="btnRepeat" type="button" title="Ulangi" aria-label="Ulangi" aria-pressed="false">
+            <svg class="icon" aria-hidden="true"><use href="#i-repeat"></use></svg>
+            <span class="player__repeat-one" id="repeatOneBadge" hidden>1</span>
+          </button>
+        </div>
+
+        <div class="player__timeline">
+          <span class="time" id="curTime">0:00</span>
+          <div class="seek" id="seek" role="slider" tabindex="0" aria-label="Posisi putar" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0:00 dari 0:00">
+            <div class="seek__rail">
+              <div class="seek__buffer" id="seekBuffer"></div>
+              <div class="seek__fill" id="seekFill"></div>
+              <div class="seek__thumb" id="seekThumb"></div>
+            </div>
+          </div>
+          <span class="time" id="durTime">0:00</span>
+        </div>
+      </div>
+
+      <div class="player__right">
+        <button class="icon-btn sleep-toggle" id="btnSleep" type="button" title="Timer tidur" aria-label="Timer tidur" aria-pressed="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-moon"></use></svg>
+          <span class="sleep-toggle__time" id="sleepTime" hidden></span>
+        </button>
+        <button class="icon-btn" id="btnMute" type="button" title="Bisukan" aria-label="Bisukan">
+          <svg class="icon" aria-hidden="true"><use href="#i-volume-2"></use></svg>
+        </button>
+        <div class="volume" id="volume" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="80" aria-valuetext="80%">
+          <div class="volume__rail">
+            <div class="volume__fill" id="volumeFill"></div>
+            <div class="volume__thumb" id="volumeThumb"></div>
+          </div>
+        </div>
+        <button class="icon-btn queue-toggle" id="btnQueue" type="button" title="Antrean" aria-label="Buka antrean" aria-pressed="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-list"></use></svg>
+          <span class="queue-toggle__dot" aria-hidden="true"></span>
+        </button>
+      </div>
+    </footer>
+
+    <aside class="queue-panel" id="queuePanel" aria-label="Antrean pemutaran" aria-hidden="true">
+      <header class="queue-panel__head">
+        <div>
+          <p class="eyebrow">Antrean</p>
+          <h2>Berikutnya</h2>
+        </div>
+        <button class="icon-btn" id="queueClose" type="button" title="Tutup antrean" aria-label="Tutup antrean">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </header>
+      <div class="queue-panel__body" id="queueBody"></div>
+      <footer class="queue-panel__foot">
+        <button class="text-btn" id="queueClear" type="button">Bersihkan antrean</button>
+        <span id="queueCount">0 lagu</span>
+      </footer>
+    </aside>
+
+    <aside class="queue-panel lyrics-panel" id="lyricsPanel" aria-label="Lirik lagu" aria-hidden="true">
+      <header class="queue-panel__head">
+        <div>
+          <p class="eyebrow">Lirik</p>
+          <h2 id="lyricsTitle">Lirik</h2>
+        </div>
+        <button class="icon-btn" id="lyricsClose" type="button" title="Tutup lirik" aria-label="Tutup lirik">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </header>
+      <div class="queue-panel__body lyrics-panel__body" id="lyricsBody"></div>
+      <footer class="queue-panel__foot lyrics-panel__foot">
+        <span id="lyricsMeta">Lirik tertanam dari file</span>
+        <span id="lyricsHint">Ketuk baris untuk melompat</span>
+      </footer>
+    </aside>
+  </div>
+
+  <div class="toast-region" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+  <div id="modalRoot"></div>
+  <div id="menuRoot"></div>
+
+  <div class="drop-overlay" id="dropOverlay" hidden>
+    <div class="drop-overlay__card">
+      <span class="drop-overlay__icon">
+        <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+      </span>
+      <h2>Lepaskan untuk mengimpor</h2>
+      <p>Tambahkan file audio ke perpustakaanmu</p>
+    </div>
+  </div>
+
+  <input id="fileInput" type="file" accept="audio/*,.mp3,.m4a,.mp4,.aac,.flac,.wav,.ogg,.oga,.opus,.weba,.webm" multiple hidden>
+  <input id="folderInput" type="file" webkitdirectory multiple hidden>
+  <audio id="audio" preload="metadata"></audio>
+
+  <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7.5"/><path d="m20.5 20.5-4.2-4.2"/></symbol>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.2 12 3l8.5 7.2V20a1 1 0 0 1-1 1h-5.2v-6.4H9.7V21H4.5a1 1 0 0 1-1-1z"/></symbol>
+      <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M2.8 12h18.4M12 2.8c2.5 2.7 3.8 5.8 3.8 9.2S14.5 18.5 12 21.2c-2.5-2.7-3.8-5.8-3.8-9.2S9.5 5.5 12 2.8z"/></symbol>
+      <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9"/><path d="M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></symbol>
+      <symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.5 2"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 21c.4-4 3.6-6 7.5-6s7.1 2 7.5 6"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 20c.3-3.5 3-5.3 6.2-5.3s5.9 1.8 6.2 5.3"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6M18 14.9c2.2.5 3.4 2.2 3.6 5.1"/></symbol>
+      <symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/></symbol>
+      <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5.5l11-2V16"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.7-7.5 1.1-1.1a5.5 5.5 0 0 0 0-7.8z"/></symbol>
+      <symbol id="i-heart-fill" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.7-7.5 1.1-1.1a5.5 5.5 0 0 0 0-7.8z" fill="currentColor" stroke="currentColor"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+      <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.5 4.6a1 1 0 0 1 1.5-.9l11 7.4a1 1 0 0 1 0 1.8l-11 7.4a1 1 0 0 1-1.5-.9z" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4.2" height="16" rx="1.2" fill="currentColor" stroke="none"/><rect x="13.8" y="4" width="4.2" height="16" rx="1.2" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-skip-back" viewBox="0 0 24 24"><path d="M19 19.6a.8.8 0 0 1-1.2.7L9 14v5.5a.8.8 0 0 1-1.6 0v-15A.8.8 0 0 1 9 4.5V10l8.8-6.3a.8.8 0 0 1 1.2.7z" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-skip-forward" viewBox="0 0 24 24"><path d="M5 4.4a.8.8 0 0 1 1.2-.7L15 10V4.5a.8.8 0 0 1 1.6 0v15a.8.8 0 0 1-1.6 0V14l-8.8 6.3a.8.8 0 0 1-1.2-.7z" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></symbol>
+      <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 1 4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
+      <symbol id="i-repeat-one" viewBox="0 0 24 24"><path d="m17 1 4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/><path d="m11.4 10.6 1.6-1v5.2"/></symbol>
+      <symbol id="i-volume-2" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.8 5.2a9.8 9.8 0 0 1 0 13.6"/></symbol>
+      <symbol id="i-volume-1" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></symbol>
+      <symbol id="i-volume-x" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="m16 9 5 6M21 9l-5 6"/></symbol>
+      <symbol id="i-list" viewBox="0 0 24 24"><path d="M8.5 6H21M8.5 12H21M8.5 18H21"/><path d="M3.2 6h.1M3.2 12h.1M3.2 18h.1" stroke-width="2.6"/></symbol>
+      <symbol id="i-playlist" viewBox="0 0 24 24"><path d="M8.5 5.5H21M8.5 11H21M8.5 16.5H14"/><path d="M3.2 5.5h.1M3.2 11h.1M3.2 16.5h.1" stroke-width="2.6"/><path d="M18.5 14v6M15.5 17h6"/></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M12 7.5v5.2M12 16.4h.01" stroke-width="2"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M12 11v5M12 7.8h.01" stroke-width="2"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3.5 6.5h17M3.5 12h17M3.5 17.5h17"/></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3.5 13.8 9l5.5 1.8-5.5 1.8L12 18l-1.8-5.4L4.7 10.8 10.2 9z"/><path d="M19 15.5l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8z"/></symbol>
+      <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></symbol>
+      <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol>
+      <symbol id="i-lyrics" viewBox="0 0 24 24"><path d="M4 6.5h10M4 11h16M4 15.5h12M4 20h7"/><circle cx="19" cy="17.5" r="2.2"/><path d="M21.2 17.5v-4l-4-1"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+      <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01" stroke-width="2.4"/></symbol>
+    </defs>
+  </svg>
+
+  <script src="js/utils.js" defer></script>
+  <script src="js/vendor/pinyin-pro.js" defer></script>
+  <script src="js/romanize.js" defer></script>
+  <script src="js/db.js" defer></script>
+  <script src="js/metadata.js" defer></script>
+  <script src="js/demo.js" defer></script>
+  <script src="js/online.js" defer></script>
+  <script src="js/youtube.js" defer></script>
+  <script src="js/downloads.js" defer></script>
+  <script src="js/home.js" defer></script>
+  <script src="js/library.js" defer></script>
+  <script src="js/player.js" defer></script>
+  <script src="js/ui.js" defer></script>
+  <script src="js/views.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
