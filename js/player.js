@@ -176,6 +176,7 @@
       version: 1,
       savedAt: now,
       trackId: state.currentId,
+      cursor: state.cursor,
       position: snapshotPosition(),
       queue: state.queue.slice(),
       baseQueue: state.baseQueue.slice(),
@@ -259,12 +260,14 @@
       return false;
     }
 
-    let cursor = queue.indexOf(currentId);
-    if (cursor < 0) {
-      const saved = Number(data.cursor);
-      cursor = Number.isInteger(saved) && queue[saved] ? saved : 0;
-      if (!queue[cursor]) cursor = 0;
-    }
+    const savedCursor = Number(data.cursor);
+    let cursor =
+      Number.isInteger(savedCursor) &&
+      savedCursor >= 0 &&
+      savedCursor < queue.length &&
+      queue[savedCursor] === currentId
+        ? savedCursor
+        : queue.indexOf(currentId);
 
     state.restoring = true;
     state.baseQueue = (Array.isArray(data.baseQueue) ? data.baseQueue : queue).filter((id) =>
@@ -455,6 +458,24 @@
     return result;
   }
 
+  function occurrenceIndex(ids, trackId, occurrence) {
+    let seen = 0;
+    for (let index = 0; index < ids.length; index += 1) {
+      if (ids[index] !== trackId) continue;
+      if (seen === occurrence) return index;
+      seen += 1;
+    }
+    return -1;
+  }
+
+  function occurrenceBefore(ids, index, trackId) {
+    let count = 0;
+    for (let cursor = 0; cursor <= index && cursor < ids.length; cursor += 1) {
+      if (ids[cursor] === trackId) count += 1;
+    }
+    return count - 1;
+  }
+
   function setShuffle(value) {
     const next = !!value;
     if (state.shuffle === next) return;
@@ -463,14 +484,24 @@
     const current = state.currentId;
     if (state.queue.length) {
       if (next) {
-        const rest = state.queue.filter((id) => id !== current);
-        state.queue = current ? [current].concat(U.shuffleArray(rest)) : U.shuffleArray(rest);
-        state.cursor = current ? 0 : -1;
+        const head = state.queue.slice(0, state.cursor + 1);
+        const rest = state.queue.slice(state.cursor + 1);
+        state.queue = head.concat(U.shuffleArray(rest));
+        state.cursor = current ? head.length - 1 : -1;
       } else {
         const base = state.baseQueue.slice();
-        if (current && base.indexOf(current) < 0) base.unshift(current);
+        const activeOccurrence = current
+          ? occurrenceBefore(state.queue, state.cursor, current)
+          : -1;
         state.queue = base;
-        state.cursor = current ? base.indexOf(current) : -1;
+        state.cursor = current
+          ? occurrenceIndex(base, current, activeOccurrence)
+          : -1;
+        if (current && state.cursor < 0) {
+          base.unshift(current);
+          state.queue = base;
+          state.cursor = 0;
+        }
       }
     }
 
@@ -552,10 +583,13 @@
     const opts = options || {};
     const isAuto = !!opts.auto;
     const current = state.currentId;
-    const ids = uniqueIds(trackIds).filter((id) => id !== current);
-    if (!ids.length) return 0;
+    const requestedIds = uniqueIds(trackIds);
+    const replayCurrent = !!current && requestedIds.includes(current);
+    const ids = requestedIds.filter((id) => id !== current);
+    if (!ids.length && !replayCurrent) return 0;
 
     if (!state.queue.length) {
+      if (replayCurrent) return 0;
       await playQueue(ids, ids[0], opts.context || state.context);
       ids.forEach((id) => {
         if (isAuto) state.autoIds.add(id);
@@ -564,10 +598,16 @@
       return ids.length;
     }
 
+    const currentOccurrence =
+      current && state.cursor >= 0
+        ? occurrenceBefore(state.queue, state.cursor, current)
+        : -1;
     ids.forEach((id) => state.autoIds.delete(id));
 
     const base = state.baseQueue.filter((id) => !ids.includes(id));
-    const currentBase = current ? base.indexOf(current) : -1;
+    const currentBase = current
+      ? occurrenceIndex(base, current, currentOccurrence)
+      : -1;
     let insertBaseAt;
     if (opts.next) {
       insertBaseAt = currentBase + 1;
@@ -595,7 +635,9 @@
       } else if (isAuto) {
         state.queue = head.concat(tail, ids);
       } else {
-        const firstAuto = tail.findIndex((id) => state.autoIds.has(id));
+        const firstAuto = tail.findIndex(
+          (id) => id !== current && state.autoIds.has(id)
+        );
         state.queue =
           firstAuto >= 0
             ? head.concat(tail.slice(0, firstAuto), ids, tail.slice(firstAuto))
@@ -604,28 +646,62 @@
       state.cursor = head.length - 1;
     } else {
       state.queue = base.slice();
-      state.cursor = current ? state.queue.indexOf(current) : -1;
+      state.cursor = current
+        ? occurrenceIndex(state.queue, current, currentOccurrence)
+        : -1;
     }
 
     if (isAuto) ids.forEach((id) => state.autoIds.add(id));
+
+    if (replayCurrent) {
+      const activeIndex = current
+        ? occurrenceIndex(state.queue, current, currentOccurrence)
+        : -1;
+      const nextIndex = activeIndex + 1;
+      let queueIndex = nextIndex;
+      let baseIndex = currentBase + 1;
+
+      if (!opts.next && !isAuto) {
+        const tail = state.queue.slice(nextIndex);
+        const firstAuto = tail.findIndex(
+          (id) => id !== current && state.autoIds.has(id)
+        );
+        queueIndex = firstAuto >= 0 ? nextIndex + firstAuto : state.queue.length;
+        const firstBaseAuto = base.slice(baseIndex).findIndex(
+          (id) => id !== current && state.autoIds.has(id)
+        );
+        baseIndex =
+          firstBaseAuto >= 0 ? baseIndex + firstBaseAuto : base.length;
+      } else if (isAuto && !opts.next) {
+        queueIndex = state.queue.length;
+        baseIndex = base.length;
+      }
+
+      state.queue.splice(Math.max(0, queueIndex), 0, current);
+      base.splice(Math.max(0, baseIndex), 0, current);
+      state.baseQueue = base;
+      if (isAuto) state.autoIds.add(current);
+    }
+
     emit("queuechange", getQueue());
     emit("statechange", getState());
     scheduleSnapshot(0);
-    return ids.length;
+    return ids.length + (replayCurrent ? 1 : 0);
   }
 
-  function removeFromQueue(trackId) {
-    const index = state.queue.indexOf(trackId);
-    if (index < 0) return;
-    const wasCurrent = trackId === state.currentId;
+  function removeQueueIndex(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
+    const trackId = state.queue[index];
+    const wasCurrent = index === state.cursor;
+    const occurrence = occurrenceBefore(state.queue, index, trackId);
     state.queue.splice(index, 1);
-    state.autoIds.delete(trackId);
-    const baseIndex = state.baseQueue.indexOf(trackId);
+    if (!state.queue.includes(trackId)) state.autoIds.delete(trackId);
+    const baseIndex = occurrenceIndex(state.baseQueue, trackId, occurrence);
     if (baseIndex >= 0) state.baseQueue.splice(baseIndex, 1);
     state.history = state.history.filter((id) => id !== trackId);
 
     if (wasCurrent) {
-      if (state.cursor > state.queue.length - 1) state.cursor = state.queue.length - 1;
+      state.cursor = Math.min(index, state.queue.length - 1);
       if (state.cursor >= 0 && state.queue[state.cursor]) {
         loadCurrent(state.isPlaying);
       } else {
@@ -638,6 +714,20 @@
     emit("queuechange", getQueue());
     emit("statechange", getState());
     scheduleSnapshot(0);
+  }
+
+  function removeFromQueue(trackId) {
+    removeQueueIndex(state.queue.indexOf(trackId));
+  }
+
+  async function playQueueIndex(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
+    if (index === state.cursor) {
+      if (!state.isPlaying) await play();
+      return;
+    }
+    state.cursor = index;
+    await loadCurrent(true);
   }
 
   function clearQueue() {
@@ -1509,6 +1599,8 @@
     playTrack,
     addToQueue,
     removeFromQueue,
+    removeQueueIndex,
+    playQueueIndex,
     clearQueue,
     getQueue,
     loadCurrent,

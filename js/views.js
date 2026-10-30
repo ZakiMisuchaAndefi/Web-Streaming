@@ -2220,10 +2220,10 @@
       '" data-track-id="' +
       esc(track.id) +
       '" data-queue-id="' +
-      esc(track.id) +
+      esc(String(opts.index)) +
       '">' +
-      '<button class="queue-item__art" type="button" data-action="queue-jump" data-id="' +
-      esc(track.id) +
+      '<button class="queue-item__art" type="button" data-action="queue-jump" data-index="' +
+      esc(String(opts.index)) +
       '" title="Putar ' +
       esc(track.title) +
       '" aria-label="Putar ' +
@@ -2243,8 +2243,8 @@
       (current
         ? '<span class="queue-item__eq" aria-label="Sedang diputar"><i></i><i></i><i></i></span>'
         : "") +
-      '<button class="icon-btn queue-item__remove" type="button" data-action="queue-remove" data-id="' +
-      esc(track.id) +
+      '<button class="icon-btn queue-item__remove" type="button" data-action="queue-remove" data-index="' +
+      esc(String(opts.index)) +
       '" title="Hapus dari antrean" aria-label="Hapus ' +
       esc(track.title) +
       ' dari antrean">' +
@@ -2270,7 +2270,7 @@
     if (current) {
       html +=
         '<div class="queue-section"><div class="queue-section__title">Sekarang diputar</div>' +
-        queueItem(current, { current: true }) +
+        queueItem(current, { current: true, index: queue.cursor }) +
         "</div>";
     }
     if (rest.length) {
@@ -2278,7 +2278,9 @@
         '<div class="queue-section"><div class="queue-section__title">Berikutnya · ' +
         rest.length +
         " lagu</div>" +
-        rest.map((track) => queueItem(track)).join("") +
+        rest
+          .map((track, index) => queueItem(track, { index: queue.cursor + 1 + index }))
+          .join("") +
         "</div>";
     }
     return html;

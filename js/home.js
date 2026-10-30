@@ -386,9 +386,7 @@
     if (added) {
       toast("“" + clean(track.title) + "” ditambahkan ke antrean.", { type: "success" });
     } else {
-      toast("“" + clean(track.title) + "” sedang diputar dan sudah ada di antrean.", {
-        icon: "info"
-      });
+      toast("Tidak ada lagu baru untuk ditambahkan ke antrean.", { icon: "info" });
     }
   }
 

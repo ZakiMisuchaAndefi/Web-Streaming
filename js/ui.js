@@ -24,6 +24,15 @@
     const node = document.createElement("div");
     node.className = "toast" + (type === "success" ? " toast--success" : type === "error" ? " toast--error" : "");
     node.innerHTML = U.svgIcon(icon) + "<span>" + U.esc(message) + "</span>";
+    if (type === "error") {
+      const closeButton = document.createElement("button");
+      closeButton.className = "toast__close";
+      closeButton.type = "button";
+      closeButton.setAttribute("aria-label", "Tutup notifikasi");
+      closeButton.textContent = "×";
+      node.appendChild(closeButton);
+      closeButton.addEventListener("click", dismiss);
+    }
     if (opts.action) {
       const button = document.createElement("button");
       button.className = "text-btn";

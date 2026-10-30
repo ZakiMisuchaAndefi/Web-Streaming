@@ -92,8 +92,13 @@
     searchOnlineTimer: 0,
     lyricsOpen: false,
     lyricsActiveIndex: -1,
+    lyricsRequestToken: 0,
+    lyricsLoadingTrackId: "",
+    lyricsFailedTrackId: "",
+    lyricsSearchedTrackIds: new Set(),
     youtubeFailedIds: new Set(),
-    youtubeSkipTimer: 0
+    youtubeSkipTimer: 0,
+    youtubeErrorToast: null
   };
 
   /* ------------------------------------------------------------------------
@@ -629,8 +634,10 @@
     P.on("statechange", (detail) => {
       syncPlayerBar(detail || P.getState());
       syncTrackRows();
+      if (detail && detail.isPlaying) dismissYoutubeErrorToast();
     });
     P.on("trackchange", () => {
+      dismissYoutubeErrorToast();
       syncPlayerBar(P.getState());
       syncTrackRows();
       renderQueue();
@@ -684,9 +691,10 @@
           : null;
 
         if (allFailed) {
-          toast("Semua lagu YouTube di antrean tidak bisa diputar.", {
+          dismissYoutubeErrorToast();
+          state.youtubeErrorToast = toast("Semua lagu YouTube di antrean tidak bisa diputar.", {
             type: "error",
-            duration: 8000,
+            duration: 5000,
             action: openAction
           });
           P.pause();
@@ -710,7 +718,8 @@
       const message = track && track.online
         ? "Tidak dapat memutar " + title + " dari internet. Periksa koneksi lalu coba lagi."
         : "Tidak dapat memutar " + title + ". Format mungkin tidak didukung browser.";
-      toast(message, { type: "error", duration: 6000 });
+      dismissYoutubeErrorToast();
+      state.youtubeErrorToast = toast(message, { type: "error", duration: 5000 });
     });
     P.on("trackchange", (detail) => {
       if (state.youtubeSkipTimer) {
@@ -728,6 +737,12 @@
         duration: 5000
       });
     });
+  }
+
+  function dismissYoutubeErrorToast() {
+    if (!state.youtubeErrorToast) return;
+    state.youtubeErrorToast.dismiss();
+    state.youtubeErrorToast = null;
   }
 
   function syncPlayerBar(playerState) {
@@ -954,8 +969,29 @@
       '<div class="lyrics-empty">' +
       icon("lyrics") +
       "<p><strong>Lirik tidak tersedia</strong></p>" +
-      "<p>Lagu ini belum memiliki lirik tertanam di tag audionya. Lirik dari file MP3, M4A, FLAC, atau OGG akan muncul otomatis di sini.</p>" +
+      "<p>Lirik tidak ditemukan di file atau katalog lirik online.</p>" +
       "</div>"
+    );
+  }
+
+  function lyricsLoadingHTML() {
+    return (
+      '<div class="lyrics-empty">' +
+      icon("lyrics") +
+      "<p><strong>Mencari lirik…</strong></p>" +
+      "<p>Lirik dicari berdasarkan judul dan artis lagu.</p>" +
+      "</div>"
+    );
+  }
+
+  function lyricsFailedHTML() {
+    return (
+      '<div class="lyrics-empty">' +
+      icon("lyrics") +
+      "<p><strong>Lirik gagal dimuat</strong></p>" +
+      '<button class="btn btn--secondary btn--small" type="button" data-action="lyrics-retry">' +
+      icon("refresh") +
+      "<span>Coba lagi</span></button></div>"
     );
   }
 
@@ -970,25 +1006,43 @@
     const track = P.currentTrack();
     const parsed = parseLyrics(track && track.lyrics);
     const synced = parsed.synced.length > 0;
+    const hasLyrics = synced || parsed.plain.length > 0;
     state.lyricsActiveIndex = -1;
 
     if (els.lyricsTitle) {
       els.lyricsTitle.textContent = track ? track.title : "Lirik";
     }
     if (els.lyricsMeta) {
-      els.lyricsMeta.textContent = !track || (!synced && !parsed.plain.length)
-        ? "Lirik tidak tersedia"
-        : synced
-          ? "Lirik sinkron"
-          : "Lirik teks";
+      if (!track) {
+        els.lyricsMeta.textContent = "Pilih lagu untuk melihat lirik";
+      } else if (!hasLyrics && state.lyricsLoadingTrackId === track.id) {
+        els.lyricsMeta.textContent = "Mencari lirik…";
+      } else if (!hasLyrics) {
+        els.lyricsMeta.textContent =
+          state.lyricsFailedTrackId === track.id
+            ? "Gagal memuat lirik"
+            : "Lirik tidak tersedia";
+      } else {
+        els.lyricsMeta.textContent = synced ? "Lirik sinkron" : "Lirik teks";
+      }
     }
     if (els.lyricsHint) {
-      els.lyricsHint.textContent = synced ? "Ketuk baris untuk melompat" : "Lirik tertanam dari file";
+      els.lyricsHint.textContent = synced ? "Ketuk baris untuk melompat" : "Lirik file atau LRCLIB";
       els.lyricsHint.hidden = !synced;
     }
 
-    if (!track || (!synced && !parsed.plain.length)) {
-      els.lyricsBody.innerHTML = lyricsEmptyHTML();
+    if (!track || !hasLyrics) {
+      if (track && state.lyricsLoadingTrackId === track.id) {
+        els.lyricsBody.innerHTML = lyricsLoadingHTML();
+      } else if (track && state.lyricsFailedTrackId === track.id) {
+        els.lyricsBody.innerHTML = lyricsFailedHTML();
+      } else if (track && state.lyricsSearchedTrackIds.has(track.id)) {
+        els.lyricsBody.innerHTML = lyricsEmptyHTML();
+      } else if (track && AM.Lyrics) {
+        requestLyrics(track);
+      } else {
+        els.lyricsBody.innerHTML = lyricsEmptyHTML();
+      }
       return;
     }
 
@@ -1017,6 +1071,35 @@
         "</div>";
     }
     updateLyricsHighlight(P.state.currentTime, true);
+  }
+
+  async function requestLyrics(track, options) {
+    const token = ++state.lyricsRequestToken;
+    state.lyricsLoadingTrackId = track.id;
+    state.lyricsFailedTrackId = "";
+    if (els.lyricsMeta) els.lyricsMeta.textContent = "Mencari lirik…";
+    els.lyricsBody.innerHTML = lyricsLoadingHTML();
+    try {
+      const result = await AM.Lyrics.lookup(track, options);
+      if (
+        token !== state.lyricsRequestToken ||
+        !state.lyricsOpen ||
+        !P.currentTrack() ||
+        P.currentTrack().id !== track.id
+      ) {
+        return;
+      }
+      state.lyricsLoadingTrackId = "";
+      state.lyricsSearchedTrackIds.add(track.id);
+      if (result && result.lyrics) track.lyrics = result.lyrics;
+      renderLyricsPanel();
+    } catch (error) {
+      if (token !== state.lyricsRequestToken) return;
+      console.warn("[app] gagal memuat lirik:", error);
+      state.lyricsLoadingTrackId = "";
+      state.lyricsFailedTrackId = track.id;
+      renderLyricsPanel();
+    }
   }
 
   function updateLyricsHighlight(currentTime, force) {
@@ -1053,6 +1136,10 @@
     const next = !!open;
     if (next && state.queueOpen) setQueueOpen(false);
     state.lyricsOpen = next;
+    if (!next) {
+      state.lyricsRequestToken += 1;
+      state.lyricsLoadingTrackId = "";
+    }
     if (els.lyricsPanel) {
       els.lyricsPanel.classList.toggle("is-open", next);
       els.lyricsPanel.setAttribute("aria-hidden", next ? "false" : "true");
@@ -1629,11 +1716,19 @@
         updateRouteQuery({ sort: actionEl.dataset.sort || "recent" });
         return;
       case "queue-jump":
-        if (actionEl.dataset.id) P.playTrack(actionEl.dataset.id);
+        if (actionEl.dataset.index != null) {
+          P.playQueueIndex(Number(actionEl.dataset.index));
+        } else if (actionEl.dataset.id) {
+          P.playTrack(actionEl.dataset.id);
+        }
         return;
       case "queue-remove":
-        if (actionEl.dataset.id) {
-          P.removeFromQueue(actionEl.dataset.id);
+        if (actionEl.dataset.index != null || actionEl.dataset.id) {
+          if (actionEl.dataset.index != null) {
+            P.removeQueueIndex(Number(actionEl.dataset.index));
+          } else {
+            P.removeFromQueue(actionEl.dataset.id);
+          }
           if (!P.getQueue().queue.length) toast("Antrean kosong.");
         }
         return;
@@ -1656,6 +1751,13 @@
           if (!P.state.isPlaying) P.play();
         }
         return;
+      case "lyrics-retry": {
+        const track = P.currentTrack();
+        if (!track || !AM.Lyrics) return;
+        state.lyricsFailedTrackId = "";
+        state.lyricsSearchedTrackIds.delete(track.id);
+        return requestLyrics(track, { force: true });
+      }
       case "set-stream-quality":
         return applyStreamQuality(actionEl.dataset.value || "high");
       case "set-download-quality":
@@ -2057,7 +2159,7 @@
         type: "success"
       });
     } else {
-      toast("Lagu yang sedang diputar sudah ada di antrean.", { icon: "info" });
+      toast("Tidak ada lagu baru untuk ditambahkan ke antrean.", { icon: "info" });
     }
   }
 
@@ -2093,7 +2195,7 @@
         type: "success"
       });
     } else {
-      toast("Lagu yang sedang diputar sudah ada di antrean.", { icon: "info" });
+      toast("Tidak ada lagu baru untuk ditambahkan ke antrean.", { icon: "info" });
     }
   }
 
@@ -2239,9 +2341,7 @@
     if (added) {
       toast(successMessage, { type: "success" });
     } else {
-      toast("“" + track.title + "” sedang diputar dan sudah ada di antrean.", {
-        icon: "info"
-      });
+      toast("Tidak ada lagu baru untuk ditambahkan ke antrean.", { icon: "info" });
     }
   }
 
