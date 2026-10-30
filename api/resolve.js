@@ -6,7 +6,7 @@ module.exports = async (req, res) => {
   if (!lib.ID.test(id)) return res.status(400).json({ error: "ID video tidak valid" });
   const quality = lib.qualityOf(req.query.quality);
   try {
-    const entry = await lib.getAudioUrl(id, quality);
+    const entry = await lib.getAudioUrl(id, quality, req.query.force === "1");
     res.setHeader("Cache-Control", "no-store");
     res.json({
       url: "/api/stream?u=" + encodeURIComponent(entry.url),

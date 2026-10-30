@@ -57,7 +57,7 @@ Tekan `Ctrl+C` di jendela PowerShell untuk menghentikan server.
 | Endpoint | Fungsi |
 | --- | --- |
 | `GET /api/health` | Status `yt-dlp`, `ffmpeg`, `mp3`, dan unduhan. |
-| `GET /api/resolve?id=VIDEO_ID&quality=high` | URL audio langsung dari YouTube (di-cache per video + kualitas). |
+| `GET /api/resolve?id=VIDEO_ID&quality=high` | URL audio langsung dari YouTube (di-cache per video + kualitas); `force=1` mengambil URL baru untuk percobaan ulang. |
 | `GET /api/stream?id=VIDEO_ID&quality=high` | Memulai stream berdasarkan ID; URL YouTube diselesaikan setelah browser memulai permintaan audio. |
 | `GET /api/radio?id=VIDEO_ID` | Daftar lagu radio YouTube untuk lagu terkait. |
 | `GET /api/download?id=VIDEO_ID&quality=best&title=...` | Memulai job unduhan latar; mengembalikan `jobId`. |

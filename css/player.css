@@ -215,15 +215,6 @@
 .player__play .icon {
   width: 17px;
   height: 17px;
-  margin-left: 1px;
-}
-
-.player__play[data-state="paused"] .icon {
-  margin-left: 2px;
-}
-
-.player__play[data-state="playing"] .icon {
-  margin-left: 0;
 }
 
 .player__play:hover:not(:disabled) {

@@ -78,9 +78,10 @@ async function run(args, timeout) {
   }
 }
 
-async function getAudioUrl(id, quality) {
+async function getAudioUrl(id, quality, force) {
   const key = id + "|" + quality;
   const now = Math.floor(Date.now() / 1000);
+  if (force) audioCache.delete(key);
   const cached = audioCache.get(key);
   if (cached && cached.expires > now + 300) return cached;
   const out = await run(

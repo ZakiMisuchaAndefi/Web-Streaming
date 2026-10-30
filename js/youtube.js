@@ -403,7 +403,8 @@
           (window.API_BASE || "") + "/api/resolve?id=" +
             encodeURIComponent(id) +
             "&quality=" +
-            encodeURIComponent(quality),
+            encodeURIComponent(quality) +
+            (opts.force ? "&force=1" : ""),
           45000
         );
         if (!response.ok) return null;

@@ -380,8 +380,16 @@
     if (!AM.Player || typeof AM.Player.addToQueue !== "function") return;
     const track = findTrack(trackId);
     if (!track) return;
-    await AM.Player.addToQueue([track.id], { context: { type: "home", label: "Rekomendasi" } });
-    toast("“" + clean(track.title) + "” ditambahkan ke antrean.", { type: "success" });
+    const added = await AM.Player.addToQueue([track.id], {
+      context: { type: "home", label: "Rekomendasi" }
+    });
+    if (added) {
+      toast("“" + clean(track.title) + "” ditambahkan ke antrean.", { type: "success" });
+    } else {
+      toast("“" + clean(track.title) + "” sedang diputar dan sudah ada di antrean.", {
+        icon: "info"
+      });
+    }
   }
 
   function findTrack(trackId) {

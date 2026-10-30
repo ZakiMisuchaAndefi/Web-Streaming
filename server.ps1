@@ -569,6 +569,7 @@ try {
       } elseif ($path -eq "/api/resolve" -and $method -eq "GET") {
         $videoId = Get-QueryValue $rawQuery "id"
         $quality = Get-QueryValue $rawQuery "quality"
+        $force = (Get-QueryValue $rawQuery "force") -eq "1"
         if ([string]::IsNullOrEmpty($quality) -or $quality -notin @("low", "medium", "high", "best")) {
           $quality = "best"
         }
@@ -578,7 +579,7 @@ try {
           $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           $cacheKey = $videoId + "|" + $quality
           $cached = $script:audioCache[$cacheKey]
-          if ($cached -and [int64]$cached.Expires -gt ($now + 300)) {
+          if (-not $force -and $cached -and [int64]$cached.Expires -gt ($now + 300)) {
             Send-Json $stream 200 "OK" @{ url = $cached.Url; expires = [int64]$cached.Expires; quality = $quality } $false
           } else {
             $result = Invoke-YtDlp $videoId $quality

@@ -641,7 +641,7 @@
     P.on("volumechange", updateVolume);
     P.on("sleeptimerchange", updateSleepTimerUI);
     P.on("sleepdone", () => {
-      toast("Timer tidur selesai — pemutaran dijeda.", { icon: "moon", duration: 6000 });
+      toast("Timer tidur selesai — pemutaran dijeda.", { icon: "clock", duration: 6000 });
     });
     P.on("trackchange", () => {
       if (state.lyricsOpen) renderLyricsPanel();
@@ -1113,7 +1113,7 @@
       icon: "clock",
       onSelect: () => {
         P.setSleepTimer(minutes);
-        toast("Timer tidur: " + minutes + " menit.", { icon: "moon" });
+        toast("Timer tidur: " + minutes + " menit.", { icon: "clock" });
       }
     }));
     items.push("divider", {
@@ -1121,7 +1121,7 @@
       icon: "music",
       onSelect: () => {
         P.setSleepTimer("track");
-        toast("Pemutaran berhenti setelah lagu ini selesai.", { icon: "moon" });
+        toast("Pemutaran berhenti setelah lagu ini selesai.", { icon: "clock" });
       }
     });
     if (timer.mode !== "off") {
@@ -2051,10 +2051,14 @@
   async function queueAlbum(key) {
     const album = L.getAlbum(key);
     if (!album || !album.tracks.length) return;
-    P.addToQueue(album.tracks.map((track) => track.id));
-    toast(album.tracks.length + " lagu dari “" + album.name + "” ditambahkan ke antrean.", {
-      type: "success"
-    });
+    const added = await P.addToQueue(album.tracks.map((track) => track.id));
+    if (added) {
+      toast(added + " lagu dari “" + album.name + "” ditambahkan ke antrean.", {
+        type: "success"
+      });
+    } else {
+      toast("Lagu yang sedang diputar sudah ada di antrean.", { icon: "info" });
+    }
   }
 
   async function likeAlbum(key) {
@@ -2083,10 +2087,14 @@
   async function queueArtist(key) {
     const artist = L.getArtist(key);
     if (!artist || !artist.tracks.length) return;
-    P.addToQueue(artist.tracks.map((track) => track.id));
-    toast(artist.tracks.length + " lagu oleh " + artist.name + " ditambahkan ke antrean.", {
-      type: "success"
-    });
+    const added = await P.addToQueue(artist.tracks.map((track) => track.id));
+    if (added) {
+      toast(added + " lagu oleh " + artist.name + " ditambahkan ke antrean.", {
+        type: "success"
+      });
+    } else {
+      toast("Lagu yang sedang diputar sudah ada di antrean.", { icon: "info" });
+    }
   }
 
   async function playPlaylist(id, shuffle) {
@@ -2219,8 +2227,22 @@
       query,
       label: contextLabel({ type: "online", provider: track.provider, query })
     };
-    P.addToQueue([trackId], { context });
-    toast("“" + track.title + "” ditambahkan ke antrean.", { type: "success" });
+    return addTrackToQueue(
+      track,
+      { context },
+      "“" + track.title + "” ditambahkan ke antrean."
+    );
+  }
+
+  async function addTrackToQueue(track, options, successMessage) {
+    const added = await P.addToQueue([track.id], options);
+    if (added) {
+      toast(successMessage, { type: "success" });
+    } else {
+      toast("“" + track.title + "” sedang diputar dan sudah ada di antrean.", {
+        icon: "info"
+      });
+    }
   }
 
   function openOnlineMenu(trackId, anchor) {
@@ -2241,10 +2263,8 @@
       {
         label: "Putar berikutnya",
         icon: "list",
-        onSelect: () => {
-          P.addToQueue([trackId], { next: true });
-          toast("Akan diputar berikutnya.");
-        }
+        onSelect: () =>
+          addTrackToQueue(track, { next: true }, "“" + track.title + "” akan diputar berikutnya.")
       },
       {
         label: "Tambahkan ke antrean",
@@ -2313,18 +2333,14 @@
       {
         label: "Putar berikutnya",
         icon: "list",
-        onSelect: () => {
-          P.addToQueue([trackId], { next: true });
-          toast("Akan diputar berikutnya.");
-        }
+        onSelect: () =>
+          addTrackToQueue(track, { next: true }, "“" + track.title + "” akan diputar berikutnya.")
       },
       {
         label: "Tambahkan ke antrean",
         icon: "plus",
-        onSelect: () => {
-          P.addToQueue([trackId]);
-          toast("Ditambahkan ke antrean.");
-        }
+        onSelect: () =>
+          addTrackToQueue(track, {}, "“" + track.title + "” ditambahkan ke antrean.")
       },
       "divider",
       {

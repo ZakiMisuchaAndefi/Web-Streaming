@@ -551,9 +551,9 @@
   async function addToQueue(trackIds, options) {
     const opts = options || {};
     const isAuto = !!opts.auto;
-    const ids = uniqueIds(trackIds);
-    if (!ids.length) return 0;
     const current = state.currentId;
+    const ids = uniqueIds(trackIds).filter((id) => id !== current);
+    if (!ids.length) return 0;
 
     if (!state.queue.length) {
       await playQueue(ids, ids[0], opts.context || state.context);
@@ -991,7 +991,8 @@
 
       // Start the media request in the user gesture before the server resolves the stream.
       track.audioVideoId = sourceId;
-      track.audioRetried = false;
+      track.audioRetryCount = 0;
+      track.audioRetrying = false;
       audio.src = streamUrl;
       audio.load();
       state.loadedTrackId = trackId;
@@ -1269,27 +1270,44 @@
       return;
     }
 
-    // URL audio yt-dlp bisa kedaluwarsa. Coba resolve ulang sekali.
-    if (!track.audioRetried && AM.Youtube) {
-      track.audioRetried = true;
+    if (track.audioRetrying) return;
+    const retryCount = Number(track.audioRetryCount) || 0;
+    if (retryCount < 2 && AM.Youtube) {
+      track.audioRetrying = true;
+      track.audioRetryCount = retryCount + 1;
       const sourceId = track.audioVideoId || track.sourceId;
       let url = null;
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, retryCount === 0 ? 500 : 1200);
+      });
+      if (state.loadToken !== token || state.currentId !== trackId) {
+        track.audioRetrying = false;
+        return;
+      }
       try {
         url = await AM.Youtube.resolveAudio(sourceId, { force: true });
       } catch (error) {
         url = null;
       }
-      if (state.loadToken !== token || state.currentId !== trackId) return;
+      if (state.loadToken !== token || state.currentId !== trackId) {
+        track.audioRetrying = false;
+        return;
+      }
       if (url) {
         audio.src = url;
         audio.load();
+        track.audioRetrying = false;
         try {
           await audio.play();
         } catch (error) {
+          if (state.loadToken !== token || state.currentId !== trackId) return;
           emit("blocked", { track, error });
         }
         return;
       }
+      track.audioRetrying = false;
+      handleAudioError();
+      return;
     }
 
     if (state.loadToken !== token || state.currentId !== trackId) return;
