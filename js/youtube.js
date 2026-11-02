@@ -1,7 +1,8 @@
 ﻿/* ==========================================================================
-   youtube.js — pencarian YouTube + resolver audio lokal (yt-dlp)
-   Tanpa API key dan tanpa pemutar video. Lagu YouTube diputar sebagai audio
-   lewat yt-dlp di server lokal; metadata diambil dari oEmbed resmi YouTube.
+   youtube.js — pencarian YouTube (InnerTube) + resolver audio lokal (yt-dlp)
+   Pencarian memakai API internal YouTube (InnerTube) lewat /api/search, tanpa
+   API key resmi. Lagu YouTube diputar sebagai audio lewat yt-dlp di server;
+   metadata tautan diambil dari oEmbed resmi YouTube.
    ========================================================================== */
 
 (function (AM) {
@@ -10,14 +11,7 @@
   const OE_BASE = "https://www.youtube.com/oembed";
   const SESSION_MAX = 100;
   const SEARCH_LIMIT = 40;
-  const SEARCH_TIMEOUT = 9000;
-  // Instance API publik Piped yang mengizinkan CORS dari browser.
-  // Dipakai berurutan: yang pertama bisa dipakai menang; sisanya cadangan.
-  const SEARCH_INSTANCES = [
-    "https://api.piped.private.coffee",
-    "https://pipedapi.ducks.party",
-    "https://pipedapi-libre.kavin.rocks"
-  ];
+  const SEARCH_TIMEOUT = 18000;
 
   const session = [];
 
@@ -127,7 +121,7 @@
     );
 
   /* ------------------------------------------------------------------------
-     Pencarian kata kunci (via API publik Piped, tanpa API key)
+     Pencarian kata kunci (via InnerTube di /api/search, tanpa API key resmi)
      ------------------------------------------------------------------------ */
 
   const VERSION_WORDS = new Set([
@@ -465,31 +459,6 @@
     return track;
   }
 
-  async function fetchPipedRelated(videoId) {
-    const order = preferredInstance
-      ? [preferredInstance].concat(SEARCH_INSTANCES.filter((base) => base !== preferredInstance))
-      : SEARCH_INSTANCES.slice();
-
-    for (const base of order) {
-      try {
-        const response = await fetchWithTimeout(
-          base + "/streams/" + encodeURIComponent(videoId),
-          SEARCH_TIMEOUT
-        );
-        if (!response.ok) continue;
-        const data = await response.json();
-        const items = data && Array.isArray(data.relatedStreams) ? data.relatedStreams : [];
-        const tracks = items
-          .map(mapSearchItem)
-          .filter((track) => !!track && track.sourceId !== videoId);
-        if (tracks.length) return tracks;
-      } catch (error) {
-        /* Coba instance berikutnya. */
-      }
-    }
-    return [];
-  }
-
   async function related(videoId, seedTrack) {
     const id = String(videoId || "").trim();
     if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return [];
@@ -518,14 +487,7 @@
       }
     }
 
-    // Cadangan 1: rekomendasi terkait dari YouTube (via Piped), biasanya
-    // berisi artis sejenis — bukan pencarian berdasarkan judul lagu.
-    if (tracks.length < 10) {
-      const relatedTracks = await fetchPipedRelated(id);
-      if (relatedTracks.length) tracks = tracks.concat(relatedTracks);
-    }
-
-    // Cadangan 2: lagu lain dari artis yang sama.
+    // Cadangan: lagu lain dari artis yang sama lewat pencarian InnerTube.
     if (tracks.length < 10) {
       const artist =
         seedTrack && seedTrack.artist ? String(seedTrack.artist).trim() : "";
@@ -552,18 +514,22 @@
     return unique;
   }
 
-  let preferredInstance = "";
+  /* ------------------------------------------------------------------------
+     Pencarian kata kunci lewat /api/search (InnerTube, tanpa API key resmi)
+     Endpoint dijalankan server lokal (server.ps1) atau fungsi Vercel (api/).
+     ------------------------------------------------------------------------ */
 
-  async function searchInstance(base, query, filter, signal) {
-    const params = new URLSearchParams({ q: query, filter });
+  async function searchViaServer(query) {
     const response = await fetchWithTimeout(
-      base + "/search?" + params.toString(),
+      (window.API_BASE || "") + "/api/search?q=" + encodeURIComponent(query),
       SEARCH_TIMEOUT
     );
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
     const items = data && Array.isArray(data.items) ? data.items : [];
-    return items.slice(0, SEARCH_LIMIT);
+    const alternates =
+      data && Array.isArray(data.alternates) ? data.alternates : [];
+    return { items: items.slice(0, SEARCH_LIMIT), alternates };
   }
 
   /* ------------------------------------------------------------------
@@ -650,53 +616,21 @@
       { youtubeNetwork: true }
     );
 
-    let list = [];
-    const order = preferredInstance
-      ? [preferredInstance].concat(SEARCH_INSTANCES.filter((b) => b !== preferredInstance))
-      : SEARCH_INSTANCES.slice();
-
-    for (const base of order) {
-      try {
-        let mainItems = [];
-        let usedMusic = false;
-        try {
-          mainItems = await searchInstance(base, query, "music_songs");
-          usedMusic = mainItems.length > 0;
-        } catch (error) {
-          if (error && error.name !== "AbortError") {
-            console.warn("[youtube] instance gagal:", base, error);
-          }
-        }
-        if (!mainItems.length) {
-          // Coba filter video biasa (bukan katalog musik).
-          try {
-            mainItems = await searchInstance(base, query, "videos");
-          } catch (error) {
-            /* Instance ini gagal total — lanjut. */
-          }
-        }
-        if (!mainItems.length) continue; // Instance hidup tapi hasil kosong — coba instance lain.
-
-        // Hasil filter video biasa dipakai sebagai kandidat cadangan.
-        let altItems = [];
-        if (usedMusic) {
-          try {
-            altItems = await searchInstance(base, query, "videos");
-          } catch (error) {
-            altItems = [];
-          }
-        } else {
-          altItems = mainItems;
-        }
-        preferredInstance = base;
-        list = attachCandidates(mainItems, altItems);
-        break;
-      } catch (error) {
-        if (error && error.name !== "AbortError") {
-          console.warn("[youtube] instance gagal:", base, error);
-        }
+    let result;
+    try {
+      result = await searchViaServer(query);
+    } catch (error) {
+      if (error && error.name !== "AbortError") {
+        console.warn("[youtube] pencarian InnerTube gagal:", error);
       }
+      throw crash;
     }
+
+    const mainItems = result.items;
+    if (!mainItems.length) throw crash;
+
+    const altItems = result.alternates.length ? result.alternates : mainItems;
+    const list = attachCandidates(mainItems, altItems);
     if (!list.length) throw crash;
 
     const sessionSeen = new Set();

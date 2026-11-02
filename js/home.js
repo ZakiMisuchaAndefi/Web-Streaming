@@ -242,7 +242,7 @@
 
     const task = (async () => {
       const results = [];
-      // Dua pencarian dijalankan berurutan supaya instance Piped tidak
+      // Dua pencarian dijalankan berurutan supaya endpoint InnerTube tidak
       // kebanjiran permintaan, tetapi kegagalan satu tidak memblokir lainnya.
       for (const query of queries) {
         try {

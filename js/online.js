@@ -8,7 +8,7 @@
   "use strict";
 
   const CACHE_TTL = 5 * 60 * 1000;
-  const REQUEST_TIMEOUT = 16000;
+  const REQUEST_TIMEOUT = 20000;
   const MAX_TRACKS = 3000;
   const LIKES_KEY = "musik.online.likes.v1";
   const LIKES_MAX = 500;

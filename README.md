@@ -13,7 +13,7 @@ Tema gelap dan terang dengan aksen merah khas Apple Music, lengkap dengan sampul
 - **Pemutar lengkap** — putar, jeda, sebelumnya/berikutnya, geser posisi, volume, acak, ulangi semua/satu lagu, dan antrean.
 - **Lanjut setelah muat ulang** — lagu, posisi, antrean, volume, acak, dan mode ulangi dipulihkan saat halaman dibuka lagi; pemutaran dimulai dalam keadaan jeda.
 - **Riwayat pemutaran** — lagu yang diputar minimal 30 detik (atau selesai jika lebih pendek) masuk ke halaman **Riwayat**, terbaru di atas. Memutar ulang memindahkannya ke atas tanpa duplikat.
-- **Musik dari YouTube tanpa impor** — cari lagu di YouTube lewat halaman **Pencarian** dengan kata kunci atau tempel tautan videonya; diputar sebagai audio lewat `yt-dlp` di server lokal, tanpa API key.
+- **Musik dari YouTube tanpa impor** — cari lagu di YouTube lewat halaman **Pencarian** dengan kata kunci atau tempel tautan videonya; pencarian memakai InnerTube, pemutaran audio lewat `yt-dlp`, tanpa API key resmi.
 - **Pencarian langsung** — kotak pencarian mencari perpustakaan dan YouTube sekaligus dalam satu halaman.
 - **Suka lintas sumber** — lagu lokal dan lagu YouTube sama-sama bisa ditandai hati. Lagu YouTube yang disukai tersimpan di perangkat ini dan tetap muncul di halaman **Suka** setelah halaman dimuat ulang.
 - **Unduhan MP3** — simpan lagu YouTube sebagai `.mp3` dengan metadata judul, artis, album, dan sampul tertanam. Membutuhkan `ffmpeg.exe`.
@@ -48,6 +48,16 @@ Lalu buka **http://127.0.0.1:4173/**.
 
 Tekan `Ctrl+C` di jendela PowerShell untuk menghentikan server.
 
+### Vercel
+
+Repo ini juga siap di-deploy ke **Vercel** tanpa build step:
+
+1. Impor repo di Vercel dan biarkan **Framework Preset** di **Other**.
+2. `api/*.js` otomatis menjadi serverless function (`vercel.json` sudah mengatur `maxDuration`).
+3. Pencarian dan halaman aplikasi langsung berjalan. Pemutaran audio memakai `yt-dlp` yang diunduh fungsi serverless ke `/tmp` saat pertama kali dipakai, jadi butuh koneksi keluar ke GitHub dan YouTube.
+
+> Di Vercel, `ffmpeg` tidak ikut terpasang sehingga tombol unduhan MP3 nonaktif. Untuk unduhan MP3, jalankan versi lokal dengan `ffmpeg.exe`.
+
 > **Penting:** jalankan lewat server lokal agar IndexedDB aktif dan koleksi tersimpan permanen. Membuka `index.html` langsung lewat `file://` masih bisa dipakai, tetapi browser dapat menonaktifkan penyimpanan sehingga koleksi hanya bertahan selama tab terbuka.
 
 ### Endpoint server lokal
@@ -57,12 +67,15 @@ Tekan `Ctrl+C` di jendela PowerShell untuk menghentikan server.
 | Endpoint | Fungsi |
 | --- | --- |
 | `GET /api/health` | Status `yt-dlp`, `ffmpeg`, `mp3`, dan unduhan. |
+| `GET /api/search?q=KATA` | Hasil pencarian YouTube lewat InnerTube (dipakai halaman Pencarian dan Beranda). |
 | `GET /api/resolve?id=VIDEO_ID&quality=high` | URL audio langsung dari YouTube (di-cache per video + kualitas); `force=1` mengambil URL baru untuk percobaan ulang. |
 | `GET /api/stream?id=VIDEO_ID&quality=high` | Memulai stream berdasarkan ID; URL YouTube diselesaikan setelah browser memulai permintaan audio. |
 | `GET /api/radio?id=VIDEO_ID` | Daftar lagu radio YouTube untuk lagu terkait. |
 | `GET /api/download?id=VIDEO_ID&quality=best&title=...` | Memulai job unduhan latar; mengembalikan `jobId`. |
 | `GET /api/download-status?job=JOB_ID` | Status job: `running`, `done`, atau `error`. |
 | `GET /api/download-file?job=JOB_ID` | Mengirim file hasil unduhan sebagai lampiran. |
+
+Saat di-deploy ke **Vercel**, endpoint yang sama dilayani fungsi Node di folder `api/` (tanpa server yang perlu menyala). Pencarian tetap berjalan tanpa `yt-dlp`; pemutaran dan unduhan audio memakai `yt-dlp` di fungsi serverless.
 
 ## Beranda streaming
 
@@ -121,7 +134,7 @@ Tidak perlu API key, akun, atau impor file. Cukup buka **Pencarian** dan ketik k
 
 Catatan:
 
-- Pencarian memakai **instance API publik Piped** (sekumpulan instance diuji bergantian, hasilnya disimpan sementara 5 menit). Jika semua instance sedang tidak bisa diakses, coba lagi beberapa saat atau tempel tautan video langsung.
+- Pencarian memakai **InnerTube**, API internal YouTube yang juga dipakai situs YouTube, lewat `/api/search` (hasil disimpan sementara 5 menit). Tidak perlu API key resmi. Jika pencarian gagal, coba lagi beberapa saat atau tempel tautan video langsung.
 - Video yang tidak bisa diambil `yt-dlp` akan dilewati otomatis; aplikasi menawarkan tautan ke YouTube.
 - Radio otomatis butuh `yt-dlp.exe` dan koneksi internet; hasilnya disimpan sementara agar tidak berulang kali mengambil daftar yang sama. Kandidat disaring: judul sama/mirip dengan lagu acuan dibuang, duplikat unggahan dirapikan, durasi wajib 1–10 menit, maksimal 2 lagu per artis dalam 10 lagu, dan artis yang sama tidak muncul dua kali berturut-turut. Cover, karaoke, dan remix dilewati kecuali lagu acuannya memang cover/remix.
 - Tautan playlist bisa ditempel, tetapi hanya video utamanya yang diputar.
@@ -155,7 +168,7 @@ Umum:
 
 ### Kenapa bukan YouTube Data API atau Spotify?
 
-Pemutaran YouTube di aplikasi ini memakai **resolver lokal `yt-dlp.exe`** yang dijalankan `server.ps1` (hanya mendengarkan di `127.0.0.1`). Browser langsung memulai permintaan elemen `<audio>` ke endpoint stream; server menyelesaikan URL audio YouTube di belakangnya agar pemanggilan putar tetap berada dalam gestur pengguna. Aplikasi ini untuk **pemakaian pribadi di localhost**; tidak ada server Node/npm — semuanya PowerShell 5.1, HTML, CSS, dan JavaScript. Pencarian kata kunci melalui API publik Piped, bukan YouTube Data API, sehingga **tanpa API key sama sekali dan tanpa tampilan video**.
+Pemutaran YouTube di aplikasi ini memakai **resolver `yt-dlp`** (`yt-dlp.exe` lewat `server.ps1` saat lokal, atau binary Linux di fungsi Vercel). Browser langsung memulai permintaan elemen `<audio>` ke endpoint stream; server menyelesaikan URL audio YouTube di belakangnya agar pemanggilan putar tetap berada dalam gestur pengguna. Pencarian kata kunci memakai **InnerTube** lewat `/api/search`, bukan YouTube Data API, sehingga **tanpa API key resmi dan tanpa tampilan video**.
 
 Pemutaran Spotify penuh juga memerlukan akun **Spotify Premium**, OAuth, dan Spotify Web Playback SDK — arsitektur yang berbeda dari pemutar `<audio>` ini.
 
@@ -189,7 +202,7 @@ Pemutaran Spotify penuh juga memerlukan akun **Spotify Premium**, OAuth, dan Spo
 - Data disimpan di **IndexedDB** milik browser, bukan di server.
 - Kapasitas bergantung pada kuota browser (biasanya beberapa GB). Pengaturan menampilkan perkiraan pemakaian.
 - Semua file lokal tetap di perangkat ini dan tidak pernah diunggah ke internet.
-- Saat memakai pencarian YouTube, kata kunci pencarian atau tautan yang kamu tempel dan metadata video dikirim ke YouTube (via instance Piped dan oEmbed). URL audio diambil oleh `yt-dlp.exe` di komputer ini, lalu aliran audionya diunduh langsung dari server YouTube. Tidak ada data perpustakaan lokal yang ikut dikirim.
+- Saat memakai pencarian YouTube, kata kunci pencarian atau tautan yang kamu tempel dan metadata video dikirim ke YouTube (via InnerTube dan oEmbed). URL audio diambil oleh `yt-dlp` di server (lokal atau fungsi Vercel), lalu aliran audionya diunduh langsung dari server YouTube. Tidak ada data perpustakaan lokal yang ikut dikirim.
 - **Daftar Suka dari YouTube** disimpan di `localStorage` browser. **File hasil unduhan** disimpan sebagai file biasa di folder `downloads/` dan tidak diunggah ke mana pun.
 - **Pengaturan → Hapus semua data** menghapus lagu, sampul, playlist, dan favorit lokal dari aplikasi. File asli di folder musikmu dan file di folder `downloads/` tidak terhapus.
 - Menghapus data situs di browser juga akan menghapus koleksi Musik, antrean, pengaturan, dan daftar Suka dari YouTube.
@@ -220,6 +233,14 @@ Pintasan selain `Esc` tidak aktif saat kamu sedang mengetik di kolom input.
 ├── server.ps1
 ├── README.md
 ├── downloads/          # hasil unduhan MP3 YouTube (dibuat otomatis)
+├── api/                # fungsi serverless Vercel (Node)
+│   ├── _innertube.js   # klien InnerTube untuk pencarian
+│   ├── search.js       # GET /api/search
+│   ├── _lib.js         # helper yt-dlp untuk audio
+│   ├── resolve.js      # GET /api/resolve
+│   ├── stream.js       # GET /api/stream
+│   ├── radio.js        # GET /api/radio
+│   └── health.js       # GET /api/health
 ├── css/
 │   ├── base.css        # variabel warna, tipografi, tombol, form
 │   ├── layout.css      # kerangka aplikasi, topbar, area konten
@@ -237,7 +258,7 @@ Pintasan selain `Esc` tidak aktif saat kamu sedang mengetik di kolom input.
     ├── metadata.js     # pembaca tag audio dan lirik tertanam
     ├── demo.js         # generator perpustakaan demo
     ├── online.js       # sumber musik online (YouTube), cache & daftar Suka
-    ├── youtube.js      # pencarian YouTube + resolver audio yt-dlp
+    ├── youtube.js      # pencarian InnerTube + resolver audio yt-dlp
     ├── downloads.js    # unduhan MP3 YouTube lewat job server
     ├── home.js         # feed streaming untuk beranda
     ├── library.js      # state perpustakaan, impor, playlist, riwayat

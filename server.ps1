@@ -5,6 +5,7 @@
 #
 # Endpoint tambahan:
 #   GET /api/health              -> { "ytdlp": true|false, "ffmpeg": true|false, "mp3": true|false }
+#   GET /api/search?q=KATA       -> { "items": [...], "alternates": [...] } (InnerTube)
 #   GET /api/resolve?id=VIDEO_ID&quality=high -> { "url": "...", "expires": <unix> }
 #   GET /api/radio?id=VIDEO_ID   -> { "tracks": [ { id, title, artist, duration } ] }
 #   GET /api/download?id=VIDEO_ID&quality=high&title=... -> { "jobId": "...", "status": "running" }
@@ -22,6 +23,14 @@ $rootDir = [System.IO.Path]::GetFullPath($Root)
 $script:ytdlpPath = Join-Path $rootDir "yt-dlp.exe"
 $script:audioCache = @{}
 $script:radioCache = @{}
+$script:searchCache = @{}
+# InnerTube: API internal YouTube yang dipakai pencarian (tanpa API key resmi).
+$script:innerTubeBase = "https://youtubei.googleapis.com/youtubei/v1/"
+$script:innerTubeKey = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+$script:innerTubeClientVersion = "2.20250626.01.00"
+$script:innerTubeVisitor = ""
+$script:innerTubeTimeout = 8
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 $script:downloadDir = Join-Path $rootDir "downloads"
 $script:downloadRoot = [System.IO.Path]::GetFullPath($script:downloadDir).TrimEnd('\') + '\'
 $script:downloadJobs = @{}
@@ -135,6 +144,164 @@ function Get-Mp3Quality($quality) {
     "high" { return "2" }
     default { return "0" }
   }
+}
+
+# --------------------------------------------------------------------------
+# InnerTube (API internal YouTube) — dipakai untuk pencarian kata kunci.
+# Referensi: https://github.com/tombulled/innertube
+# --------------------------------------------------------------------------
+
+function Get-TextValue($value) {
+  if ($null -eq $value) { return "" }
+  if ($value -is [string]) { return $value }
+  $props = $value.PSObject.Properties
+  $simple = $props["simpleText"]
+  if ($simple -and $null -ne $simple.Value) { return [string]$simple.Value }
+  $runs = $props["runs"]
+  if ($runs -and $runs.Value) {
+    $parts = @()
+    foreach ($run in $runs.Value) {
+      if ($null -ne $run -and $run.PSObject.Properties["text"]) {
+        $parts += [string]$run.text
+      }
+    }
+    return ($parts -join "")
+  }
+  return ""
+}
+
+$script:rendererNames = @("videoRenderer", "compactVideoRenderer", "playlistVideoRenderer", "gridVideoRenderer")
+
+function Add-VideoRendererNode($node, $list) {
+  if ($null -eq $node) { return }
+  if ($node -is [string] -or $node -is [System.ValueType]) { return }
+
+  if ($node -is [System.Collections.IDictionary]) {
+    foreach ($value in $node.Values) { Add-VideoRendererNode $value $list }
+    return
+  }
+
+  if ($node -is [System.Collections.IEnumerable] -and -not ($node -is [System.Management.Automation.PSCustomObject])) {
+    foreach ($item in $node) { Add-VideoRendererNode $item $list }
+    return
+  }
+
+  $props = $node.PSObject.Properties
+  foreach ($name in $script:rendererNames) {
+    $prop = $props[$name]
+    if ($prop -and $null -ne $prop.Value -and $prop.Value -is [System.Management.Automation.PSCustomObject]) {
+      [void]$list.Add($prop.Value)
+    }
+  }
+  foreach ($prop in $props) {
+    if ($script:rendererNames -contains $prop.Name) { continue }
+    if ($null -eq $prop.Value) { continue }
+    if ($prop.Value -is [System.Management.Automation.PSCustomObject] -or
+        ($prop.Value -is [System.Collections.IEnumerable] -and -not ($prop.Value -is [string]))) {
+      Add-VideoRendererNode $prop.Value $list
+    }
+  }
+}
+
+function Get-VideoRenderers($data) {
+  $list = New-Object System.Collections.ArrayList
+  Add-VideoRendererNode $data $list
+  return $list.ToArray()
+}
+
+function ConvertTo-DurationSeconds($text) {
+  if ([string]::IsNullOrWhiteSpace($text)) { return 0 }
+  $total = 0
+  foreach ($part in $text.Trim().Split(":")) {
+    $value = 0
+    if (-not [int]::TryParse($part, [ref]$value)) { return 0 }
+    $total = ($total * 60) + $value
+  }
+  return $total
+}
+
+function ConvertTo-SearchItems($renderers, $limit) {
+  $items = @()
+  $seen = @{}
+  foreach ($renderer in $renderers) {
+    if ($items.Count -ge $limit) { break }
+    $videoId = [string]$renderer.videoId
+    if ($videoId -notmatch '^[A-Za-z0-9_-]{11}$' -or $seen.ContainsKey($videoId)) { continue }
+    $title = (Get-TextValue $renderer.title).Trim()
+    if ([string]::IsNullOrWhiteSpace($title)) { continue }
+    $owner = (Get-TextValue $renderer.ownerText).Trim()
+    if ([string]::IsNullOrWhiteSpace($owner)) { $owner = (Get-TextValue $renderer.longBylineText).Trim() }
+    if ([string]::IsNullOrWhiteSpace($owner)) { $owner = (Get-TextValue $renderer.shortBylineText).Trim() }
+    $seen[$videoId] = $true
+    $items += @{
+      url = "https://www.youtube.com/watch?v=$videoId"
+      title = $title
+      uploaderName = $owner
+      duration = (ConvertTo-DurationSeconds (Get-TextValue $renderer.lengthText))
+    }
+  }
+  return $items
+}
+
+function Invoke-InnerTube($endpoint, $body) {
+  $payload = @{
+    context = @{
+      client = @{
+        clientName = "WEB"
+        clientVersion = $script:innerTubeClientVersion
+        gl = "US"
+        hl = "en"
+      }
+    }
+  }
+  foreach ($key in $body.Keys) { $payload[$key] = $body[$key] }
+
+  $headers = @{
+    "X-Goog-Api-Format-Version" = "1"
+    "X-YouTube-Client-Name" = "1"
+    "X-YouTube-Client-Version" = $script:innerTubeClientVersion
+    "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    "Referer" = "https://www.youtube.com/"
+    "Accept-Language" = "en-US,en;q=0.9"
+  }
+  if (-not [string]::IsNullOrEmpty($script:innerTubeVisitor)) {
+    $headers["X-Goog-Visitor-Id"] = $script:innerTubeVisitor
+  }
+
+  $uri = $script:innerTubeBase + $endpoint + "?key=" + $script:innerTubeKey + "&alt=json&prettyPrint=false"
+  $json = $payload | ConvertTo-Json -Depth 12 -Compress
+  $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+  $response = Invoke-RestMethod -Uri $uri -Method Post -Body $bytes -ContentType "application/json; charset=utf-8" -Headers $headers -TimeoutSec $script:innerTubeTimeout
+  if ($response.responseContext -and $response.responseContext.visitorData) {
+    $script:innerTubeVisitor = [string]$response.responseContext.visitorData
+  }
+  return $response
+}
+
+function Invoke-InnerTubeSearch($query) {
+  $main = @()
+  $alternates = @()
+  $lastError = ""
+
+  try {
+    $data = Invoke-InnerTube "search" @{ query = $query }
+    $main = @(ConvertTo-SearchItems (Get-VideoRenderers $data) 40)
+  } catch {
+    $lastError = $_.Exception.Message
+  }
+
+  try {
+    $data = Invoke-InnerTube "search" @{ query = $query; params = "EgIQAQ%3D%3D" }
+    $alternates = @(ConvertTo-SearchItems (Get-VideoRenderers $data) 40)
+  } catch {
+    if ([string]::IsNullOrEmpty($lastError)) { $lastError = $_.Exception.Message }
+  }
+
+  if ($main.Count -eq 0) { $main = $alternates }
+  if ($main.Count -eq 0) {
+    throw "Pencarian InnerTube gagal: $lastError"
+  }
+  return @{ items = $main; alternates = $alternates }
 }
 
 function Invoke-YtDlp($videoId, $quality) {
@@ -531,6 +698,30 @@ try {
         $available = Test-Path -LiteralPath $script:ytdlpPath -PathType Leaf
         $hasFfmpeg = -not [string]::IsNullOrEmpty($script:ffmpegPath)
         Send-Json $stream 200 "OK" @{ ytdlp = $available; ffmpeg = $hasFfmpeg; mp3 = ($available -and $hasFfmpeg); downloads = $available } $headOnly
+      } elseif ($path -eq "/api/search" -and ($method -eq "GET" -or $headOnly)) {
+        $query = Get-QueryValue $rawQuery "q"
+        if ([string]::IsNullOrWhiteSpace($query)) {
+          Send-Json $stream 400 "Bad Request" @{ error = "Kata kunci pencarian kosong" } $headOnly
+        } else {
+          $query = $query.Trim()
+          if ($query.Length -gt 80) { $query = $query.Substring(0, 80) }
+          $cacheKey = $query.ToLowerInvariant()
+          $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+          $cached = $script:searchCache[$cacheKey]
+          if ($cached -and [int64]$cached.Expires -gt $now) {
+            Send-Json $stream 200 "OK" $cached.Payload $headOnly
+          } else {
+            try {
+              $result = Invoke-InnerTubeSearch $query
+              $payload = @{ items = $result.items; alternates = $result.alternates }
+              if ($script:searchCache.Count -gt 100) { $script:searchCache.Clear() }
+              $script:searchCache[$cacheKey] = @{ Payload = $payload; Expires = ($now + 300) }
+              Send-Json $stream 200 "OK" $payload $headOnly
+            } catch {
+              Send-Json $stream 502 "Bad Gateway" @{ error = $_.Exception.Message } $headOnly
+            }
+          }
+        }
       } elseif ($path -eq "/api/stream" -and ( $method -eq "GET" -or $headOnly) -and (Get-QueryValue $rawQuery "id")) {
         $videoId = Get-QueryValue $rawQuery "id"
         $quality = Get-QueryValue $rawQuery "quality"
