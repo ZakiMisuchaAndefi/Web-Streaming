@@ -5,12 +5,16 @@ const UA =
 const MAX_AUDIO_CACHE = 200;
 const audioCache = new Map();
 
+// Klien yang saat ini masih memberi URL audio langsung (tanpa PO token).
+// Catatan: context.client.platform harus nama hardware yang valid
+// ("MOBILE"/"DESKTOP"), bukan nama klien seperti "IOS" — nilai itu ditolak
+// API dengan HTTP 400 sehingga resolusi audio selalu gagal.
 const INNER_TUBE_CLIENTS = [
   {
-    id: "ANDROID_VR",
-    clientName: "ANDROID_VR",
-    clientVersion: "1.60.19",
-    clientId: 28,
+    id: "ANDROID",
+    clientName: "ANDROID",
+    clientVersion: "20.10.38",
+    clientId: 3,
     platform: "MOBILE",
     hl: "en",
     gl: "US"
@@ -20,7 +24,7 @@ const INNER_TUBE_CLIENTS = [
     clientName: "IOS",
     clientVersion: "20.10.4",
     clientId: 5,
-    platform: "IOS",
+    platform: "MOBILE",
     hl: "en",
     gl: "US"
   }
@@ -116,7 +120,7 @@ async function getAudioUrl(id, quality, force) {
 
   const limits = { low: 96000, medium: 128000, high: 192000, best: Infinity };
   const limit = limits[mode] || Infinity;
-  let picked = null;
+  const failures = [];
 
   for (const client of INNER_TUBE_CLIENTS) {
     try {
@@ -129,6 +133,12 @@ async function getAudioUrl(id, quality, force) {
         },
         client
       );
+
+      const play = (data && data.playabilityStatus) || {};
+      if (play.status && play.status !== "OK") {
+        failures.push(client.clientName + ": " + play.status + " " + (play.reason || ""));
+        continue;
+      }
 
       const formats = Array.isArray(data && data.streamingData && data.streamingData.adaptiveFormats)
         ? data.streamingData.adaptiveFormats
@@ -148,6 +158,12 @@ async function getAudioUrl(id, quality, force) {
       if (!candidates.length) continue;
 
       const sorted = candidates.slice().sort((left, right) => {
+        // Utamakan WebM/Opus: didukung Chrome, Edge, Firefox, dan Safari
+        // modern, termasuk Chromium tanpa codec AAC. MP4/AAC tetap dipakai
+        // bila tidak ada pilihan WebM.
+        const leftWebm = /audio\/webm/i.test(String(left.mimeType));
+        const rightWebm = /audio\/webm/i.test(String(right.mimeType));
+        if (leftWebm !== rightWebm) return leftWebm ? -1 : 1;
         return (Number(right.bitrate) || 0) - (Number(left.bitrate) || 0);
       });
       const allowed = sorted.filter((format) => (Number(format.bitrate) || 0) <= limit);
@@ -163,10 +179,14 @@ async function getAudioUrl(id, quality, force) {
       return entry;
     } catch (error) {
       // Coba client berikutnya bila satu klien gagal.
+      failures.push(client.clientName + ": " + (error && error.message ? error.message : error));
     }
   }
 
-  throw new Error("Audio YouTube tidak tersedia saat ini.");
+  throw new Error(
+    "Audio YouTube tidak tersedia saat ini." +
+      (failures.length ? " (" + failures.join(" | ") + ")" : "")
+  );
 }
 
 function isAllowed(raw) {

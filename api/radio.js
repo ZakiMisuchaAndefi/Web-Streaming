@@ -8,6 +8,7 @@ function textOf(node) {
   if (Array.isArray(node)) return node.map(textOf).join(" ");
   if (typeof node === "object") {
     if (typeof node.simpleText === "string") return node.simpleText;
+    if (typeof node.text === "string") return node.text;
     if (Array.isArray(node.runs)) return node.runs.map((run) => textOf(run)).join("");
     if (Array.isArray(node.segments)) return node.segments.map((segment) => textOf(segment)).join("");
     if (node.accessibility && node.accessibility.accessibilityData && typeof node.accessibility.accessibilityData.label === "string") {
@@ -62,6 +63,42 @@ function parseRenderer(renderer) {
   return { id: videoId, title, artist, duration };
 }
 
+async function getRadioTracks(id) {
+  const payload = await lib.innertube(
+    "next",
+    {
+      videoId: id,
+      playlistId: "RD" + id
+    },
+    {
+      id: "WEB",
+      clientName: "WEB",
+      clientVersion: "2.20250626.01.00",
+      clientId: 1,
+      platform: "DESKTOP",
+      hl: "en",
+      gl: "US"
+    }
+  );
+
+  const seen = new Set();
+  const tracks = [];
+  const renderers = collectPlaylistRenderers(payload, []);
+
+  for (const renderer of renderers) {
+    const parsed = parseRenderer(renderer);
+    if (!parsed || seen.has(parsed.id) || parsed.id === id) continue;
+    seen.add(parsed.id);
+    tracks.push(parsed);
+    if (tracks.length >= 40) break;
+  }
+
+  if (!tracks.length) {
+    throw new Error("Radio YouTube tidak menghasilkan daftar lagu");
+  }
+  return tracks;
+}
+
 module.exports = async (req, res) => {
   const id = String(req.query.id || "");
   if (!lib.ID.test(id)) return res.status(400).json({ error: "ID video tidak valid" });
@@ -71,39 +108,7 @@ module.exports = async (req, res) => {
   if (hit && hit.expires > now) return res.json({ tracks: hit.tracks });
 
   try {
-    const payload = await lib.innertube(
-      "next",
-      {
-        videoId: id,
-        playlistId: "RD" + id
-      },
-      {
-        id: "WEB",
-        clientName: "WEB",
-        clientVersion: "2.20250626.01.00",
-        clientId: 1,
-        platform: "DESKTOP",
-        hl: "en",
-        gl: "US"
-      }
-    );
-
-    const seen = new Set();
-    const tracks = [];
-    const renderers = collectPlaylistRenderers(payload, []);
-
-    for (const renderer of renderers) {
-      const parsed = parseRenderer(renderer);
-      if (!parsed || seen.has(parsed.id) || parsed.id === id) continue;
-      seen.add(parsed.id);
-      tracks.push(parsed);
-      if (tracks.length >= 40) break;
-    }
-
-    if (!tracks.length) {
-      throw new Error("Radio YouTube tidak menghasilkan daftar lagu");
-    }
-
+    const tracks = await getRadioTracks(id);
     cache.set(id, { tracks, expires: now + 30 * 60 * 1000 });
     res.json({ tracks });
   } catch (error) {
@@ -111,3 +116,5 @@ module.exports = async (req, res) => {
     res.status(502).json({ error: "Layanan radio tidak tersedia saat ini." });
   }
 };
+
+module.exports.getRadioTracks = getRadioTracks;

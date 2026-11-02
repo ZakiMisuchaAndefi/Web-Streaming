@@ -122,6 +122,50 @@
     return UI.toast(message, options);
   }
 
+  let youtubeFallbackModal = null;
+  let youtubeFallbackTrackId = "";
+
+  function showYoutubeFallback(track) {
+    const videoId = String(track && track.sourceId || "");
+    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return false;
+    if (youtubeFallbackModal) youtubeFallbackModal.close();
+
+    const body = document.createElement("div");
+    const note = document.createElement("p");
+    note.className = "youtube-fallback__note";
+    note.textContent =
+      "Audio langsung sedang ditolak sumbernya. Lagu tetap diputar di halaman ini melalui player resmi.";
+    const frame = document.createElement("iframe");
+    frame.className = "youtube-fallback__frame";
+    frame.title = "Pemutar video " + (track.title || "YouTube");
+    frame.src =
+      "https://www.youtube-nocookie.com/embed/" +
+      encodeURIComponent(videoId) +
+      "?autoplay=1&playsinline=1&rel=0";
+    frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+    frame.allowFullscreen = true;
+    frame.referrerPolicy = "strict-origin-when-cross-origin";
+    body.append(note, frame);
+
+    const fallbackTrackId = track.id;
+    const modal = UI.openModal({
+      title: "Lanjutkan pemutaran di aplikasi",
+      sub: track.title || "YouTube",
+      width: "wide",
+      flush: true,
+      body,
+      onClose: () => {
+        if (youtubeFallbackModal === modal) {
+          youtubeFallbackModal = null;
+          youtubeFallbackTrackId = "";
+        }
+      }
+    });
+    youtubeFallbackTrackId = fallbackTrackId;
+    youtubeFallbackModal = modal;
+    return true;
+  }
+
   function normalizeHash(hash) {
     const value = String(hash || "").trim();
     if (!value || value === "#" || value === "#/" || !value.startsWith("#/")) return "#/home";
@@ -638,6 +682,9 @@
       if (detail && detail.isPlaying) dismissYoutubeErrorToast();
     });
     P.on("trackchange", () => {
+      if (youtubeFallbackModal && P.state.currentId !== youtubeFallbackTrackId) {
+        youtubeFallbackModal.close();
+      }
       dismissYoutubeErrorToast();
       syncPlayerBar(P.getState());
       syncTrackRows();
@@ -670,8 +717,9 @@
       const title = track ? '"' + track.title + '"' : "Lagu ini";
 
       if (isYoutube) {
-        // Satu toast per lagu. Kandidat cadangan sudah dicoba diam-diam
-        // oleh resolver audio InnerTube.
+        P.pause();
+        if (showYoutubeFallback(track)) return;
+
         const failed = state.youtubeFailedIds || (state.youtubeFailedIds = new Set());
         if (track && track.id) failed.add(track.id);
 
@@ -688,35 +736,25 @@
           !hasOtherTracks &&
           queueIds.length > 0 &&
           queueIds.every((id) => failed.has(id));
-        const openUrl = track && track.externalUrl;
-        const openAction = openUrl
-          ? {
-              label: "Buka di YouTube",
-              onClick: () => window.open(openUrl, "_blank", "noopener,noreferrer")
-            }
-          : null;
-
         if (allFailed) {
           dismissYoutubeErrorToast();
           state.youtubeErrorToast = toast("Semua lagu YouTube di antrean tidak bisa diputar.", {
             type: "error",
-            duration: 5000,
-            action: openAction
+            duration: 5000
           });
           P.pause();
           return;
         }
 
         toast(title + " tidak bisa diputar — lanjut ke lagu berikutnya.", {
-          duration: 5000,
-          action: openAction
+          duration: 5000
         });
 
         if (state.youtubeSkipTimer) return;
         state.youtubeSkipTimer = window.setTimeout(() => {
           state.youtubeSkipTimer = 0;
           if (P.state.isPlaying) return;
-          P.next(true);
+          P.next(false, true);
         }, 700);
         return;
       }

@@ -20,16 +20,15 @@ param(
 
 $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
 $rootDir = [System.IO.Path]::GetFullPath($Root)
-$script:INNER_TUBEPath = Join-Path $rootDir "InnerTube resolver"
+$script:INNER_TUBEPath = Join-Path $rootDir "scripts\innertube-cli.js"
+$script:nodePath = ""
+try {
+  $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+  if ($nodeCommand) { $script:nodePath = [string]$nodeCommand.Source }
+} catch { }
 $script:audioCache = @{}
 $script:radioCache = @{}
 $script:searchCache = @{}
-# InnerTube: API internal YouTube yang dipakai pencarian (tanpa API key resmi).
-$script:innerTubeBase = "https://youtubei.googleapis.com/youtubei/v1/"
-$script:innerTubeKey = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
-$script:innerTubeClientVersion = "2.20250626.01.00"
-$script:innerTubeVisitor = ""
-$script:innerTubeTimeout = 8
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 $script:downloadDir = Join-Path $rootDir "downloads"
 $script:downloadRoot = [System.IO.Path]::GetFullPath($script:downloadDir).TrimEnd('\') + '\'
@@ -100,15 +99,156 @@ function Send-Json($stream, $status, $reason, $payload, $headOnly) {
   Send-Response $stream $status $reason "application/json; charset=utf-8" $bytes $headOnly
 }
 
-function Send-Redirect($stream, $url) {
-  $header = "HTTP/1.1 302 Found`r`n" +
-    "Location: $url`r`n" +
-    "Content-Length: 0`r`n" +
-    "Cache-Control: no-store`r`n" +
-    "Connection: close`r`n`r`n"
-  $headerBytes = [System.Text.Encoding]::ASCII.GetBytes($header)
-  $stream.Write($headerBytes, 0, $headerBytes.Length)
-  $stream.Flush()
+# Proxy audio dari googlevideo (bukan redirect) supaya sama dengan
+# api/stream.js di Vercel. Chromium memblokir redirect media lintas-origin
+# dengan net::ERR_BLOCKED_BY_ORB, jadi byte audio harus diteruskan server.
+function Send-AudioStream($stream, $url, $clientRange, $headOnly) {
+  $maxBytes = 2 * 1024 * 1024
+  $start = 0
+  $end = $maxBytes - 1
+  $suffixLength = 0
+  if ($clientRange -match '^bytes=(\d*)-(\d*)$') {
+    if ($Matches[1] -eq "" -and $Matches[2] -ne "") {
+      $suffixLength = [Math]::Min([int64]$Matches[2], [int64]$maxBytes)
+    } elseif ($Matches[1] -ne "") {
+      $start = [int64]$Matches[1]
+      if ($Matches[2] -ne "") { $end = [int64]$Matches[2] }
+      else { $end = $start + $maxBytes - 1 }
+      if ($end -lt $start) { throw "Rentang audio tidak valid" }
+      if (($end - $start + 1) -gt $maxBytes) { $end = $start + $maxBytes - 1 }
+    }
+  }
+
+  $initialUri = $null
+  if (-not [Uri]::TryCreate([string]$url, [UriKind]::Absolute, [ref]$initialUri) -or
+      $initialUri.Scheme -ne "https" -or
+      ($initialUri.Host -ne "googlevideo.com" -and
+       -not $initialUri.Host.EndsWith(".googlevideo.com", [StringComparison]::OrdinalIgnoreCase))) {
+    throw "URL audio bukan host Google Video yang diizinkan"
+  }
+  $total = 0L
+  if ($initialUri.Query -match '(?:\?|&)clen=(\d+)') {
+    $total = [int64]$Matches[1]
+    if ($total -gt 0) {
+      if ($suffixLength -gt 0) {
+        $suffixLength = [Math]::Min([Math]::Min([int64]$suffixLength, [int64]$maxBytes), $total)
+        $start = $total - $suffixLength
+        $end = $total - 1
+        $suffixLength = 0
+      } elseif ($start -ge $total) {
+        $header = "HTTP/1.1 416 Range Not Satisfiable`r`n" +
+          "Content-Range: bytes */$total`r`n" +
+          "Accept-Ranges: bytes`r`n" +
+          "Content-Length: 0`r`n" +
+          "Connection: close`r`n`r`n"
+        $headerBytes = [System.Text.Encoding]::ASCII.GetBytes($header)
+        $stream.Write($headerBytes, 0, $headerBytes.Length)
+        $stream.Flush()
+        return
+      } else {
+        $end = [Math]::Min([Math]::Min([int64]$end, [int64]($start + $maxBytes - 1)), [int64]($total - 1))
+      }
+    }
+  }
+
+  $target = $url
+  $response = $null
+  for ($attempt = 0; $attempt -lt 6; $attempt++) {
+    $request = [System.Net.HttpWebRequest]::Create($target)
+    $request.Method = "GET"
+    $request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    $request.Accept = "*/*"
+    $request.AllowAutoRedirect = $false
+    $request.Timeout = 30000
+    $request.ReadWriteTimeout = 30000
+    if ($suffixLength -gt 0) {
+      $request.AddRange("bytes", [int64](-$suffixLength))
+    } else {
+      $request.AddRange("bytes", [int64]$start, [int64]$end)
+    }
+
+    try {
+      $response = $request.GetResponse()
+    } catch [System.Net.WebException] {
+      $failure = $_.Exception.Response
+      if ($failure) {
+        $statusCode = [int]$failure.StatusCode
+        if ($statusCode -ge 300 -and $statusCode -lt 400) {
+          $location = $failure.Headers["Location"]
+          $failure.Close()
+          if ([string]::IsNullOrEmpty($location)) { throw "Redirect audio tanpa Location" }
+          $target = (New-Object System.Uri((New-Object System.Uri($target)), $location)).AbsoluteUri
+          $redirectUri = $null
+          if (-not [Uri]::TryCreate([string]$target, [UriKind]::Absolute, [ref]$redirectUri) -or
+              $redirectUri.Scheme -ne "https" -or
+              ($redirectUri.Host -ne "googlevideo.com" -and
+               -not $redirectUri.Host.EndsWith(".googlevideo.com", [StringComparison]::OrdinalIgnoreCase))) {
+            throw "URL redirect audio bukan host Google Video yang diizinkan"
+          }
+          continue
+        }
+      }
+      throw
+    }
+
+    if ([int]$response.StatusCode -ge 300 -and [int]$response.StatusCode -lt 400) {
+      $location = $response.Headers["Location"]
+      $response.Close()
+      if ([string]::IsNullOrEmpty($location)) { throw "Redirect tanpa Location" }
+      $target = (New-Object System.Uri((New-Object System.Uri($target)), $location)).AbsoluteUri
+      $redirectUri = $null
+      if (-not [Uri]::TryCreate([string]$target, [UriKind]::Absolute, [ref]$redirectUri) -or
+          $redirectUri.Scheme -ne "https" -or
+          ($redirectUri.Host -ne "googlevideo.com" -and
+           -not $redirectUri.Host.EndsWith(".googlevideo.com", [StringComparison]::OrdinalIgnoreCase))) {
+        throw "URL redirect audio bukan host Google Video yang diizinkan"
+      }
+      continue
+    }
+    break
+  }
+
+  if (-not $response) { throw "Gagal mengambil audio" }
+
+  try {
+    $upstream = $response.GetResponseStream()
+    $memory = New-Object System.IO.MemoryStream
+    $buffer = New-Object byte[] 65536
+    $total = 0
+    while ($total -lt $maxBytes) {
+      $want = [Math]::Min($buffer.Length, $maxBytes - $total)
+      $read = $upstream.Read($buffer, 0, $want)
+      if ($read -le 0) { break }
+      $memory.Write($buffer, 0, $read)
+      $total += $read
+    }
+    $bytes = $memory.ToArray()
+    $memory.Dispose()
+    $contentType = if ($response.ContentType) { $response.ContentType } else { "audio/mp4" }
+    $contentRange = $response.Headers["Content-Range"]
+    $status = 206
+    $reason = "Partial Content"
+    if ([string]::IsNullOrEmpty($contentRange)) {
+      $status = 200
+      $reason = "OK"
+    }
+
+    $header = "HTTP/1.1 $status $reason`r`n" +
+      "Content-Type: $contentType`r`n" +
+      "Content-Length: $($bytes.Length)`r`n" +
+      "Accept-Ranges: bytes`r`n" +
+      $(if ($contentRange) { "Content-Range: $contentRange`r`n" } else { "" }) +
+      "Cache-Control: no-store`r`n" +
+      "Connection: close`r`n`r`n"
+    $headerBytes = [System.Text.Encoding]::ASCII.GetBytes($header)
+    $stream.Write($headerBytes, 0, $headerBytes.Length)
+    if (-not $headOnly -and $bytes.Length -gt 0) {
+      $stream.Write($bytes, 0, $bytes.Length)
+    }
+    $stream.Flush()
+  } finally {
+    $response.Close()
+  }
 }
 
 function Get-QueryValue($query, $name) {
@@ -126,17 +266,7 @@ function Get-QueryValue($query, $name) {
   return $null
 }
 
-function Get-AudioFormat($quality) {
-  switch ($quality) {
-    "low" { return "bestaudio[abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio" }
-    "medium" { return "bestaudio[abr<=128]/bestaudio[ext=m4a]/bestaudio" }
-    "high" { return "bestaudio[abr<=192]/bestaudio[ext=m4a]/bestaudio" }
-    "lossless" { return "bestaudio/bestaudio[ext=m4a]" }
-    default { return "bestaudio/bestaudio[ext=m4a]" }
-  }
-}
-
-# Kualitas VBR MP3 untuk InnerTube: 0 = terbaik, 9 = paling hemat.
+# Kualitas VBR MP3 untuk unduhan: 0 = terbaik, 9 = paling hemat.
 function Get-Mp3Quality($quality) {
   switch ($quality) {
     "low" { return "7" }
@@ -147,174 +277,32 @@ function Get-Mp3Quality($quality) {
 }
 
 # --------------------------------------------------------------------------
-# InnerTube (API internal YouTube) — dipakai untuk pencarian kata kunci.
+# InnerTube (API internal YouTube) — pencarian, audio, dan radio.
 # Referensi: https://github.com/tombulled/innertube
+# Logika dijalankan lewat scripts/innertube-cli.js (Node) supaya sama dengan
+# fungsi /api di Vercel.
 # --------------------------------------------------------------------------
 
-function Get-TextValue($value) {
-  if ($null -eq $value) { return "" }
-  if ($value -is [string]) { return $value }
-  $props = $value.PSObject.Properties
-  $simple = $props["simpleText"]
-  if ($simple -and $null -ne $simple.Value) { return [string]$simple.Value }
-  $runs = $props["runs"]
-  if ($runs -and $runs.Value) {
-    $parts = @()
-    foreach ($run in $runs.Value) {
-      if ($null -ne $run -and $run.PSObject.Properties["text"]) {
-        $parts += [string]$run.text
-      }
-    }
-    return ($parts -join "")
-  }
-  return ""
+function Test-InnerTubeResolver {
+  return (-not [string]::IsNullOrEmpty($script:nodePath)) -and
+    (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf)
 }
 
-$script:rendererNames = @("videoRenderer", "compactVideoRenderer", "playlistVideoRenderer", "gridVideoRenderer")
-
-function Add-VideoRendererNode($node, $list) {
-  if ($null -eq $node) { return }
-  if ($node -is [string] -or $node -is [System.ValueType]) { return }
-
-  if ($node -is [System.Collections.IDictionary]) {
-    foreach ($value in $node.Values) { Add-VideoRendererNode $value $list }
-    return
-  }
-
-  if ($node -is [System.Collections.IEnumerable] -and -not ($node -is [System.Management.Automation.PSCustomObject])) {
-    foreach ($item in $node) { Add-VideoRendererNode $item $list }
-    return
-  }
-
-  $props = $node.PSObject.Properties
-  foreach ($name in $script:rendererNames) {
-    $prop = $props[$name]
-    if ($prop -and $null -ne $prop.Value -and $prop.Value -is [System.Management.Automation.PSCustomObject]) {
-      [void]$list.Add($prop.Value)
-    }
-  }
-  foreach ($prop in $props) {
-    if ($script:rendererNames -contains $prop.Name) { continue }
-    if ($null -eq $prop.Value) { continue }
-    if ($prop.Value -is [System.Management.Automation.PSCustomObject] -or
-        ($prop.Value -is [System.Collections.IEnumerable] -and -not ($prop.Value -is [string]))) {
-      Add-VideoRendererNode $prop.Value $list
-    }
-  }
-}
-
-function Get-VideoRenderers($data) {
-  $list = New-Object System.Collections.ArrayList
-  Add-VideoRendererNode $data $list
-  return $list.ToArray()
-}
-
-function ConvertTo-DurationSeconds($text) {
-  if ([string]::IsNullOrWhiteSpace($text)) { return 0 }
-  $total = 0
-  foreach ($part in $text.Trim().Split(":")) {
-    $value = 0
-    if (-not [int]::TryParse($part, [ref]$value)) { return 0 }
-    $total = ($total * 60) + $value
-  }
-  return $total
-}
-
-function ConvertTo-SearchItems($renderers, $limit) {
-  $items = @()
-  $seen = @{}
-  foreach ($renderer in $renderers) {
-    if ($items.Count -ge $limit) { break }
-    $videoId = [string]$renderer.videoId
-    if ($videoId -notmatch '^[A-Za-z0-9_-]{11}$' -or $seen.ContainsKey($videoId)) { continue }
-    $title = (Get-TextValue $renderer.title).Trim()
-    if ([string]::IsNullOrWhiteSpace($title)) { continue }
-    $owner = (Get-TextValue $renderer.ownerText).Trim()
-    if ([string]::IsNullOrWhiteSpace($owner)) { $owner = (Get-TextValue $renderer.longBylineText).Trim() }
-    if ([string]::IsNullOrWhiteSpace($owner)) { $owner = (Get-TextValue $renderer.shortBylineText).Trim() }
-    $seen[$videoId] = $true
-    $items += @{
-      url = "https://www.youtube.com/watch?v=$videoId"
-      title = $title
-      uploaderName = $owner
-      duration = (ConvertTo-DurationSeconds (Get-TextValue $renderer.lengthText))
-    }
-  }
-  return $items
-}
-
-function Invoke-InnerTube($endpoint, $body) {
-  $payload = @{
-    context = @{
-      client = @{
-        clientName = "WEB"
-        clientVersion = $script:innerTubeClientVersion
-        gl = "US"
-        hl = "en"
-      }
-    }
-  }
-  foreach ($key in $body.Keys) { $payload[$key] = $body[$key] }
-
-  $headers = @{
-    "X-Goog-Api-Format-Version" = "1"
-    "X-YouTube-Client-Name" = "1"
-    "X-YouTube-Client-Version" = $script:innerTubeClientVersion
-    "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    "Referer" = "https://www.youtube.com/"
-    "Accept-Language" = "en-US,en;q=0.9"
-  }
-  if (-not [string]::IsNullOrEmpty($script:innerTubeVisitor)) {
-    $headers["X-Goog-Visitor-Id"] = $script:innerTubeVisitor
-  }
-
-  $uri = $script:innerTubeBase + $endpoint + "?key=" + $script:innerTubeKey + "&alt=json&prettyPrint=false"
-  $json = $payload | ConvertTo-Json -Depth 12 -Compress
-  $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
-  $response = Invoke-RestMethod -Uri $uri -Method Post -Body $bytes -ContentType "application/json; charset=utf-8" -Headers $headers -TimeoutSec $script:innerTubeTimeout
-  if ($response.responseContext -and $response.responseContext.visitorData) {
-    $script:innerTubeVisitor = [string]$response.responseContext.visitorData
-  }
-  return $response
-}
-
-function Invoke-InnerTubeSearch($query) {
-  $main = @()
-  $alternates = @()
-  $lastError = ""
-
-  try {
-    $data = Invoke-InnerTube "search" @{ query = $query }
-    $main = @(ConvertTo-SearchItems (Get-VideoRenderers $data) 40)
-  } catch {
-    $lastError = $_.Exception.Message
-  }
-
-  try {
-    $data = Invoke-InnerTube "search" @{ query = $query; params = "EgIQAQ%3D%3D" }
-    $alternates = @(ConvertTo-SearchItems (Get-VideoRenderers $data) 40)
-  } catch {
-    if ([string]::IsNullOrEmpty($lastError)) { $lastError = $_.Exception.Message }
-  }
-
-  if ($main.Count -eq 0) { $main = $alternates }
-  if ($main.Count -eq 0) {
-    throw "Pencarian InnerTube gagal: $lastError"
-  }
-  return @{ items = $main; alternates = $alternates }
-}
-
-function Invoke-INNER_TUBE($videoId, $quality) {
-  if (-not (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf)) {
-    return @{ Status = 503; Error = "InnerTube tidak ditemukan" }
+function Invoke-InnertubeCli([string[]]$CliArgs, [int]$TimeoutMs) {
+  if ([string]::IsNullOrEmpty($script:nodePath) -or
+      -not (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf)) {
+    return @{ Status = 503; Error = "Node.js atau scripts/innertube-cli.js tidak ditemukan" }
   }
 
   $process = $null
   try {
+    $quoted = @()
+    foreach ($arg in $CliArgs) {
+      $quoted += '"' + ([string]$arg).Replace('"', ' ') + '"'
+    }
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $script:INNER_TUBEPath
-    $format = Get-AudioFormat $quality
-    $startInfo.Arguments = '-f "' + $format + '" -g --no-playlist --no-warnings "https://www.youtube.com/watch?v=' + $videoId + '"'
+    $startInfo.FileName = $script:nodePath
+    $startInfo.Arguments = '"' + $script:INNER_TUBEPath + '" ' + ($quoted -join ' ')
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
@@ -329,9 +317,9 @@ function Invoke-INNER_TUBE($videoId, $quality) {
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()
 
-    if (-not $process.WaitForExit(20000)) {
+    if (-not $process.WaitForExit($TimeoutMs)) {
       try { $process.Kill() } catch { }
-      return @{ Status = 502; Error = "InnerTube melebihi batas waktu 20 detik" }
+      return @{ Status = 504; Error = "InnerTube melebihi batas waktu" }
     }
 
     $stdout = $stdoutTask.Result
@@ -343,19 +331,7 @@ function Invoke-INNER_TUBE($videoId, $quality) {
       return @{ Status = 502; Error = $last }
     }
 
-    $lines = @($stdout -split "`r?`n" | Where-Object { $_.Trim() -ne "" })
-    $url = if ($lines.Count -gt 0) { $lines[0].Trim() } else { "" }
-    if ($url -notmatch '^https?://') {
-      return @{ Status = 502; Error = "InnerTube tidak mengembalikan URL audio" }
-    }
-
-    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-    $expires = $now + 3600
-    if ($url -match '[?&]expire=(\d+)') {
-      $expires = [int64]$Matches[1]
-    }
-
-    return @{ Status = 200; Url = $url; Expires = [int64]$expires }
+    return @{ Status = 200; Output = $stdout.Trim() }
   } catch {
     return @{ Status = 502; Error = $_.Exception.Message }
   } finally {
@@ -363,84 +339,82 @@ function Invoke-INNER_TUBE($videoId, $quality) {
   }
 }
 
+function Invoke-InnerTubeSearch($query) {
+  # Memakai resolver Node yang sama dengan fungsi /api/search di Vercel,
+  # sehingga hasil lokal (lagu YouTube Music) identik dengan produksi.
+  $result = Invoke-InnertubeCli @("search", $query) 20000
+  if ($result.Status -ne 200) {
+    throw "Pencarian InnerTube gagal: $($result.Error)"
+  }
+  $payload = $result.Output | ConvertFrom-Json
+  return @{
+    items = @($payload.items)
+    alternates = @($payload.alternates)
+  }
+}
+
+function Invoke-INNER_TUBE($videoId, $quality) {
+  $result = Invoke-InnertubeCli @("audio", $videoId, $quality) 20000
+  if ($result.Status -ne 200) {
+    return @{ Status = $result.Status; Error = $result.Error }
+  }
+
+  $url = [string]$result.Output
+  if ($url -notmatch '^https?://') {
+    return @{ Status = 502; Error = "InnerTube tidak mengembalikan URL audio" }
+  }
+
+  $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+  $expires = $now + 3600
+  if ($url -match '[?&]expire=(\d+)') {
+    $expires = [int64]$Matches[1]
+  }
+
+  return @{ Status = 200; Url = $url; Expires = [int64]$expires }
+}
+
 function Invoke-INNER_TUBERadio($videoId) {
-  if (-not (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf)) {
-    return @{ Status = 503; Error = "InnerTube tidak ditemukan" }
+  $result = Invoke-InnertubeCli @("radio", $videoId) 30000
+  if ($result.Status -ne 200) {
+    return @{ Status = $result.Status; Error = $result.Error }
   }
 
-  $process = $null
-  try {
-    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $script:INNER_TUBEPath
-    $format = "%(id)s`t%(title)s`t%(duration)s`t%(uploader)s"
-    # Proses lokal lama dihapus; radio dan audio menggunakan API InnerTube di /api.
-    $startInfo.UseShellExecute = $false
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    $startInfo.CreateNoWindow = $true
-    $startInfo.WorkingDirectory = $rootDir
+  $tracks = @()
+  $seen = @{}
+  foreach ($line in ($result.Output -split "`r?`n")) {
+    if ($tracks.Count -ge 40) { break }
+    if ([string]::IsNullOrWhiteSpace($line)) { continue }
+    $cols = $line -split "`t"
+    if ($cols.Count -lt 3) { continue }
 
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo = $startInfo
-    [void]$process.Start()
+    $vid = $cols[0].Trim()
+    if ($vid -notmatch '^[A-Za-z0-9_-]{11}$') { continue }
+    if ($vid -eq $videoId -or $seen.ContainsKey($vid)) { continue }
 
-    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $title = $cols[1].Trim()
+    if ([string]::IsNullOrWhiteSpace($title)) { continue }
+    $lowerTitle = $title.ToLowerInvariant()
+    if ($lowerTitle -match 'full album|compilation|kompilasi|podcast|medley|nonstop|non-stop|greatest hits|mega hits|dj mix|megamix') { continue }
 
-    if (-not $process.WaitForExit(30000)) {
-      try { $process.Kill() } catch { }
-      return @{ Status = 502; Error = "Radio YouTube melebihi batas waktu 30 detik" }
+    $duration = 0
+    [void][int]::TryParse($cols[2].Trim(), [ref]$duration)
+    # Hanya lagu: lewati Shorts, live panjang, kompilasi, dan podcast.
+    if ($duration -lt 60 -or $duration -gt 600) { continue }
+
+    $artist = if ($cols.Count -ge 4) { $cols[3].Trim() } else { "" }
+    $seen[$vid] = $true
+    $tracks += @{
+      id = $vid
+      title = $title
+      artist = $artist
+      duration = $duration
     }
-
-    $stdout = $stdoutTask.Result
-    $stderr = $stderrTask.Result
-
-    if ($process.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($stdout)) {
-      $lines = @($stderr -split "`r?`n" | Where-Object { $_.Trim() -ne "" })
-      $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1].Trim() } else { "InnerTube gagal (kode $($process.ExitCode))" }
-      return @{ Status = 502; Error = $last }
-    }
-
-    $tracks = @()
-    $seen = @{}
-    foreach ($line in ($stdout -split "`r?`n")) {
-      if ($tracks.Count -ge 40) { break }
-      if ([string]::IsNullOrWhiteSpace($line)) { continue }
-      $cols = $line -split "`t"
-      if ($cols.Count -lt 4) { continue }
-
-      $vid = $cols[0].Trim()
-      if ($vid -notmatch '^[A-Za-z0-9_-]{11}$') { continue }
-      if ($vid -eq $videoId -or $seen.ContainsKey($vid)) { continue }
-
-      $title = $cols[1].Trim()
-      if ([string]::IsNullOrWhiteSpace($title)) { continue }
-      $lowerTitle = $title.ToLowerInvariant()
-      if ($lowerTitle -match 'full album|compilation|kompilasi|podcast|medley|nonstop|non-stop|greatest hits|mega hits|dj mix|megamix') { continue }
-
-      $duration = 0
-      [void][int]::TryParse($cols[2].Trim(), [ref]$duration)
-      # Hanya lagu: lewati Shorts, live panjang, kompilasi, dan podcast.
-      if ($duration -lt 60 -or $duration -gt 600) { continue }
-
-      $seen[$vid] = $true
-      $tracks += @{
-        id = $vid
-        title = $title
-        artist = $cols[3].Trim()
-        duration = $duration
-      }
-    }
-
-    if ($tracks.Count -eq 0) {
-      return @{ Status = 502; Error = "Radio YouTube tidak mengembalikan lagu" }
-    }
-    return @{ Status = 200; Tracks = $tracks }
-  } catch {
-    return @{ Status = 502; Error = $_.Exception.Message }
-  } finally {
-    if ($process) { $process.Dispose() }
   }
+
+  if ($tracks.Count -eq 0) {
+    return @{ Status = 502; Error = "Radio YouTube tidak mengembalikan lagu" }
+  }
+  return @{ Status = 200; Tracks = $tracks }
 }
 
 # --------------------------------------------------------------------------
@@ -514,8 +488,8 @@ function Refresh-DownloadJob($job) {
 }
 
 function Start-DownloadJob($videoId, $quality, $title) {
-  if (-not (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf)) {
-    return @{ Status = 503; Error = "InnerTube tidak ditemukan" }
+  if (-not (Test-InnerTubeResolver)) {
+    return @{ Status = 503; Error = "Node.js atau scripts/innertube-cli.js tidak ditemukan" }
   }
   if ([string]::IsNullOrEmpty($script:ffmpegPath)) {
     return @{
@@ -582,18 +556,23 @@ function Start-DownloadJob($videoId, $quality, $title) {
     }
   }
 
-  $outTemplate = Join-Path $script:downloadDir ("%(id)s-" + $quality + ".%(ext)s")
-  $format = Get-AudioFormat $quality
+  $resolved = Invoke-INNER_TUBE $videoId $quality
+  if ($resolved.Status -ne 200) {
+    return @{ Status = $resolved.Status; Error = $resolved.Error }
+  }
+
+  $outFile = Join-Path $script:downloadDir ($videoId + "-" + $quality + ".mp3")
   $mp3Quality = Get-Mp3Quality $quality
-  $arguments = '-f "' + $format + '" --no-playlist --no-warnings --no-progress --no-part --newline' +
-    ' --extract-audio --audio-format mp3 --audio-quality ' + $mp3Quality +
-    ' --embed-metadata --embed-thumbnail --convert-thumbnails jpg' +
-    ' --ffmpeg-location "' + $script:ffmpegPath + '"' +
-    ' -o "' + $outTemplate + '" "https://www.youtube.com/watch?v=' + $videoId + '"'
+  $safeTitle = ([string]$title).Replace('"', "'").Replace("`r", " ").Replace("`n", " ")
+  $arguments = '-y -hide_banner -loglevel error -nostdin' +
+    ' -i "' + $resolved.Url + '"' +
+    ' -vn -map 0:a:0 -c:a libmp3lame -q:a ' + $mp3Quality +
+    ' -id3v2_version 3 -metadata title="' + $safeTitle + '" -metadata comment="YouTube"' +
+    ' -f mp3 "' + $outFile + '"'
 
   try {
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $script:INNER_TUBEPath
+    $startInfo.FileName = $script:ffmpegPath
     $startInfo.Arguments = $arguments
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true
@@ -655,10 +634,10 @@ function Send-DownloadFile($stream, $filePath, $downloadName, $headOnly) {
 Write-Host ""
 Write-Host "  Musik - server lokal" -ForegroundColor Red
 Write-Host "  http://127.0.0.1:$Port/" -ForegroundColor White
-if (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf) {
-  Write-Host "  Audio resolver: InnerTube resolver siap" -ForegroundColor Green
+if (Test-InnerTubeResolver) {
+  Write-Host "  Audio resolver: InnerTube (Node) siap" -ForegroundColor Green
 } else {
-  Write-Host "  Audio resolver: InnerTube resolver tidak ditemukan (lagu YouTube nonaktif)" -ForegroundColor Yellow
+  Write-Host "  Audio resolver: Node.js/scripts/innertube-cli.js tidak ditemukan (lagu YouTube nonaktif)" -ForegroundColor Yellow
 }
 if (-not [string]::IsNullOrEmpty($script:ffmpegPath)) {
   Write-Host "  ffmpeg: siap (unduhan MP3 + metadata aktif)" -ForegroundColor Green
@@ -677,9 +656,11 @@ try {
       $reader = New-Object System.IO.StreamReader($stream, [System.Text.Encoding]::ASCII, $false, 4096, $true)
       $requestLine = $reader.ReadLine()
       if ([string]::IsNullOrWhiteSpace($requestLine)) { continue }
+      $clientRange = ""
       while ($true) {
         $line = $reader.ReadLine()
         if ($null -eq $line -or $line -eq "") { break }
+        if ($line -match '^Range:\s*(.+)$') { $clientRange = $Matches[1].Trim() }
       }
 
       $parts = $requestLine.Split(" ")
@@ -695,7 +676,7 @@ try {
       $headOnly = $method -eq "HEAD"
 
       if ($path -eq "/api/health" -and ($method -eq "GET" -or $headOnly)) {
-        $available = Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf
+        $available = Test-InnerTubeResolver
         $hasFfmpeg = -not [string]::IsNullOrEmpty($script:ffmpegPath)
         Send-Json $stream 200 "OK" @{ INNER_TUBE = $available; ffmpeg = $hasFfmpeg; mp3 = ($available -and $hasFfmpeg); downloads = $available } $headOnly
       } elseif ($path -eq "/api/search" -and ($method -eq "GET" -or $headOnly)) {
@@ -747,13 +728,11 @@ try {
             }
           }
           if ($cached) {
-            $audioUri = $null
-            if ([Uri]::TryCreate([string]$cached.Url, [UriKind]::Absolute, [ref]$audioUri) -and
-                $audioUri.Scheme -eq "https" -and
-                ($audioUri.Host -eq "googlevideo.com" -or $audioUri.Host.EndsWith(".googlevideo.com", [StringComparison]::OrdinalIgnoreCase))) {
-              Send-Redirect $stream $cached.Url
-            } else {
-              Send-Json $stream 502 "Bad Gateway" @{ error = "InnerTube mengembalikan URL audio yang tidak valid" } $headOnly
+            try {
+              Send-AudioStream $stream $cached.Url $clientRange $headOnly
+            } catch {
+              Write-Host "[stream] gagal meneruskan audio: $($_.Exception.Message)" -ForegroundColor Yellow
+              Send-Json $stream 502 "Bad Gateway" @{ error = "Layanan audio tidak tersedia saat ini." } $headOnly
             }
           }
         }

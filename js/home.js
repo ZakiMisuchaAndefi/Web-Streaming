@@ -307,7 +307,7 @@
     return state.sections.find((section) => section.key === key) || null;
   }
 
-  function playIds(ids, startId, label, shuffle) {
+  function playIds(ids, startId, label, shuffle, autoplay) {
     if (!AM.Player || typeof AM.Player.playQueue !== "function") return;
     const cleanIds = (ids || []).filter(Boolean);
     if (!cleanIds.length) {
@@ -317,47 +317,28 @@
     if (shuffle) {
       AM.Player.setShuffle(true);
       const random = cleanIds[Math.floor(Math.random() * cleanIds.length)];
-      AM.Player.playQueue(cleanIds, random, { type: "home", label });
+      AM.Player.playQueue(cleanIds, random, { type: "home", label }, { autoplay: autoplay !== false });
       return;
     }
     const start = startId && cleanIds.includes(startId) ? startId : cleanIds[0];
-    AM.Player.playQueue(cleanIds, start, { type: "home", label });
+    AM.Player.playQueue(cleanIds, start, { type: "home", label }, { autoplay: autoplay !== false });
   }
 
-  function ensureResolver() {
-    if (!AM.Youtube || typeof AM.Youtube.checkLocalResolver !== "function") {
-      return Promise.resolve(true);
-    }
-    return AM.Youtube.checkLocalResolver().then((available) => {
-      if (!available) {
-        toast("Layanan YouTube saat ini tidak tersedia. Coba lagi nanti.", {
-          type: "error",
-          icon: "alert"
-        });
-      }
-      return available;
-    });
-  }
-
-  async function playTrack(sectionKey, trackId, options) {
+  function playTrack(sectionKey, trackId, options) {
     const opts = options || {};
     const section = sectionById(sectionKey);
     if (!section) return;
     const ids = section.tracks.map((track) => track.id);
     if (!ids.includes(trackId)) ids.unshift(trackId);
-    const available = await ensureResolver();
-    if (!available) return;
     playIds(ids, trackId, section.title, !!opts.shuffle);
   }
 
-  async function playSection(sectionKey, shuffle) {
+  function playSection(sectionKey, shuffle) {
     const section = sectionById(sectionKey);
     if (!section || !section.tracks.length) {
       toast("Rekomendasi masih dimuat. Coba lagi sebentar.", { icon: "info" });
       return;
     }
-    const available = await ensureResolver();
-    if (!available) return;
     playIds(
       section.tracks.map((track) => track.id),
       section.tracks[0].id,
@@ -366,11 +347,9 @@
     );
   }
 
-  async function playStation(trackId) {
+  function playStation(trackId) {
     const track = findTrack(trackId);
     if (!track) return;
-    const available = await ensureResolver();
-    if (!available) return;
     const label = "Radio " + (clean(track.artist) || clean(track.title));
     playIds([track.id], track.id, label);
     toast("Stasiun " + label.replace(/^Radio /, "") + " dimulai.", { icon: "radio" });
@@ -403,8 +382,6 @@
     if (!value) return;
     if (!AM.Youtube || typeof AM.Youtube.search !== "function") return;
     toast("Memuat “" + value + "” dari YouTube…", { icon: "globe" });
-    const available = await ensureResolver();
-    if (!available) return;
     try {
       const list = await AM.Youtube.search(value);
       const tracks = uniqueTracks(list, new Set()).slice(0, 20);
@@ -415,7 +392,11 @@
         });
         return;
       }
-      playIds(tracks.map((track) => track.id), tracks[0].id, value);
+      playIds(tracks.map((track) => track.id), tracks[0].id, value, false, false);
+      toast("Lagu siap diputar. Tekan tombol putar untuk memulai.", {
+        icon: "info",
+        duration: 5000
+      });
     } catch (error) {
       toast("Gagal memuat “" + value + "”. Periksa koneksi internet.", {
         type: "error",

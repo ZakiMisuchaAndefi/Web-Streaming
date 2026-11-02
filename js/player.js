@@ -543,7 +543,7 @@
     return { baseQueue, queue, cursor: 0 };
   }
 
-  async function playQueue(ids, startId, context) {
+  async function playQueue(ids, startId, context, options) {
     const clean = uniqueIds(ids);
     if (!clean.length) return;
     const start = startId && clean.includes(startId) ? startId : clean[0];
@@ -556,7 +556,7 @@
     state.radioSeeded = new Set();
     state.autoIds = new Set();
     emit("queuechange", getQueue());
-    await loadCurrent(true);
+    await loadCurrent(!(options && options.autoplay === false));
   }
 
   async function playTrack(trackId, options) {
@@ -808,6 +808,14 @@
       }
     } catch (error) {
       /* Media Session tidak wajib. */
+    }
+  }
+
+  function reportPlayFailure(track, error) {
+    if (error && error.name === "NotAllowedError") {
+      emit("blocked", { track, error });
+    } else if (!error || error.name !== "AbortError") {
+      console.warn("[player] audio.play() gagal:", error);
     }
   }
 
@@ -1102,7 +1110,7 @@
         } catch (error) {
           if (token !== state.loadToken || state.currentId !== trackId) return;
           state.pendingPlay = false;
-          emit("blocked", { track, error });
+          reportPlayFailure(track, error);
           state.isPlaying = false;
           emit("statechange", getState());
         }
@@ -1174,7 +1182,7 @@
     } catch (error) {
       if (token !== state.loadToken || state.currentId !== trackId) return;
       state.pendingPlay = false;
-      emit("blocked", { track, error });
+      reportPlayFailure(track, error);
     }
   }
 
@@ -1223,7 +1231,7 @@
     emit("time", { currentTime: 0, duration: 0, buffered: 0 });
   }
 
-  async function next(manual) {
+  async function next(manual, stopAtEnd) {
     if (!state.queue.length) return;
     // Hanya tunggu radio bila benar-benar sudah di ujung antrean; lompat
     // lagu di tengah antrean tidak boleh tertahan proses latar belakang.
@@ -1244,7 +1252,7 @@
       await loadCurrent(true);
       return;
     }
-    if (state.repeat === "all" || manual) {
+    if ((state.repeat === "all" && !stopAtEnd) || manual) {
       state.cursor = 0;
       await loadCurrent(true);
       return;
@@ -1398,13 +1406,39 @@
           await audio.play();
         } catch (error) {
           if (state.loadToken !== token || state.currentId !== trackId) return;
-          emit("blocked", { track, error });
+          reportPlayFailure(track, error);
         }
         return;
       }
       track.audioRetrying = false;
       handleAudioError();
       return;
+    }
+
+    const candidateIds = youtubeCandidateIds(track);
+    const currentIndex = candidateIds.indexOf(track.audioVideoId || track.sourceId);
+    const nextCandidate = candidateIds
+      .slice(currentIndex + 1)
+      .find((id) => id !== (track.audioVideoId || track.sourceId));
+    if (nextCandidate && typeof AM.Youtube.audioStreamUrl === "function") {
+      const candidateUrl = AM.Youtube.audioStreamUrl(nextCandidate);
+      if (candidateUrl) {
+        track.audioVideoId = nextCandidate;
+        track.audioRetryCount = 0;
+        track.audioRetrying = true;
+        audio.src = candidateUrl;
+        audio.load();
+        try {
+          await audio.play();
+        } catch (error) {
+          if (state.loadToken !== token || state.currentId !== trackId) return;
+          reportPlayFailure(track, error);
+        }
+        if (state.loadToken === token && state.currentId === trackId) {
+          track.audioRetrying = false;
+        }
+        return;
+      }
     }
 
     if (state.loadToken !== token || state.currentId !== trackId) return;
