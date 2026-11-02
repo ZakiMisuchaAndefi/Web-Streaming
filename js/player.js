@@ -595,6 +595,7 @@
         if (isAuto) state.autoIds.add(id);
         else state.autoIds.delete(id);
       });
+      if (!isAuto && ids.length) emit("queueadded", { ids: ids.slice() });
       return ids.length;
     }
 
@@ -686,7 +687,13 @@
     emit("queuechange", getQueue());
     emit("statechange", getState());
     scheduleSnapshot(0);
-    return ids.length + (replayCurrent ? 1 : 0);
+    const added = ids.length + (replayCurrent ? 1 : 0);
+    if (!isAuto && added) {
+      emit("queueadded", {
+        ids: ids.concat(replayCurrent ? [current] : [])
+      });
+    }
+    return added;
   }
 
   function removeQueueIndex(index) {

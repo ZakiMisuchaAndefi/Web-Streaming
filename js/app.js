@@ -82,6 +82,7 @@
     history: [],
     historyIndex: 0,
     queueOpen: false,
+    queueNotificationUnread: false,
     dragDepth: 0,
     activeImportModal: null,
     importJob: null,
@@ -643,6 +644,11 @@
       renderQueue();
     });
     P.on("queuechange", renderQueue);
+    P.on("queueadded", () => {
+      if (state.queueOpen || P.getQueue().queue.length < 2) return;
+      state.queueNotificationUnread = true;
+      updateQueueIndicator();
+    });
     P.on("time", updateTime);
     P.on("time", (detail) => updateLyricsHighlight(detail && detail.currentTime));
     P.on("volumechange", updateVolume);
@@ -835,9 +841,7 @@
     }
     if (els.repeatOneBadge) els.repeatOneBadge.hidden = s.repeat !== "one";
 
-    $$(".queue-toggle").forEach((button) => {
-      button.classList.toggle("has-queue", hasQueue);
-    });
+    updateQueueIndicator();
     if (els.btnQueue) els.btnQueue.setAttribute("aria-pressed", state.queueOpen ? "true" : "false");
 
     if (!hasTrack) {
@@ -905,20 +909,26 @@
       els.queueCount.textContent = queue.queue.length + " lagu";
     }
     if (els.queueClear) els.queueClear.disabled = !queue.queue.length;
+    updateQueueIndicator();
+  }
+
+  function updateQueueIndicator() {
     $$(".queue-toggle").forEach((button) => {
-      button.classList.toggle("has-queue", queue.queue.length > 0);
+      button.classList.toggle("has-unread", state.queueNotificationUnread);
     });
   }
 
   function setQueueOpen(open) {
     if (open && state.lyricsOpen) setLyricsOpen(false);
     state.queueOpen = !!open;
+    if (state.queueOpen) state.queueNotificationUnread = false;
     if (els.queuePanel) {
       els.queuePanel.classList.toggle("is-open", state.queueOpen);
       els.queuePanel.setAttribute("aria-hidden", state.queueOpen ? "false" : "true");
     }
     if (els.btnQueue) els.btnQueue.setAttribute("aria-pressed", state.queueOpen ? "true" : "false");
     if (els.topbarQueue) els.topbarQueue.setAttribute("aria-pressed", state.queueOpen ? "true" : "false");
+    updateQueueIndicator();
     if (state.queueOpen) renderQueue();
   }
 

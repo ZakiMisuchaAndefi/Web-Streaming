@@ -97,7 +97,7 @@
   transition: opacity var(--speed) var(--ease), transform var(--speed) var(--ease);
 }
 
-.queue-toggle.has-queue .queue-toggle__dot {
+.queue-toggle.has-unread .queue-toggle__dot {
   opacity: 1;
   transform: scale(1);
 }
