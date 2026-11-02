@@ -1154,7 +1154,7 @@
       } catch (error) {
         if (token !== state.loadToken || state.currentId !== trackId) return;
         state.pendingPlay = false;
-        emit("blocked", { track, error });
+        reportPlayFailure(track, error);
         state.isPlaying = false;
         emit("statechange", getState());
       }

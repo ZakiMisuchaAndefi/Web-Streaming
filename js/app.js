@@ -122,50 +122,6 @@
     return UI.toast(message, options);
   }
 
-  let youtubeFallbackModal = null;
-  let youtubeFallbackTrackId = "";
-
-  function showYoutubeFallback(track) {
-    const videoId = String(track && track.sourceId || "");
-    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return false;
-    if (youtubeFallbackModal) youtubeFallbackModal.close();
-
-    const body = document.createElement("div");
-    const note = document.createElement("p");
-    note.className = "youtube-fallback__note";
-    note.textContent =
-      "Audio langsung sedang ditolak sumbernya. Lagu tetap diputar di halaman ini melalui player resmi.";
-    const frame = document.createElement("iframe");
-    frame.className = "youtube-fallback__frame";
-    frame.title = "Pemutar video " + (track.title || "YouTube");
-    frame.src =
-      "https://www.youtube-nocookie.com/embed/" +
-      encodeURIComponent(videoId) +
-      "?autoplay=1&playsinline=1&rel=0";
-    frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
-    frame.allowFullscreen = true;
-    frame.referrerPolicy = "strict-origin-when-cross-origin";
-    body.append(note, frame);
-
-    const fallbackTrackId = track.id;
-    const modal = UI.openModal({
-      title: "Lanjutkan pemutaran di aplikasi",
-      sub: track.title || "YouTube",
-      width: "wide",
-      flush: true,
-      body,
-      onClose: () => {
-        if (youtubeFallbackModal === modal) {
-          youtubeFallbackModal = null;
-          youtubeFallbackTrackId = "";
-        }
-      }
-    });
-    youtubeFallbackTrackId = fallbackTrackId;
-    youtubeFallbackModal = modal;
-    return true;
-  }
-
   function normalizeHash(hash) {
     const value = String(hash || "").trim();
     if (!value || value === "#" || value === "#/" || !value.startsWith("#/")) return "#/home";
@@ -682,9 +638,6 @@
       if (detail && detail.isPlaying) dismissYoutubeErrorToast();
     });
     P.on("trackchange", () => {
-      if (youtubeFallbackModal && P.state.currentId !== youtubeFallbackTrackId) {
-        youtubeFallbackModal.close();
-      }
       dismissYoutubeErrorToast();
       syncPlayerBar(P.getState());
       syncTrackRows();
@@ -717,9 +670,6 @@
       const title = track ? '"' + track.title + '"' : "Lagu ini";
 
       if (isYoutube) {
-        P.pause();
-        if (showYoutubeFallback(track)) return;
-
         const failed = state.youtubeFailedIds || (state.youtubeFailedIds = new Set());
         if (track && track.id) failed.add(track.id);
 
@@ -2442,13 +2392,6 @@
         onSelect: () => downloadTrack(track)
       }
     ];
-    if (track.externalUrl) {
-      items.push("divider", {
-        label: "Buka di YouTube",
-        icon: "external",
-        onSelect: () => openExternalUrl(track.externalUrl)
-      });
-    }
     UI.contextMenu({ anchor, items });
   }
 
