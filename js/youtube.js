@@ -1,8 +1,7 @@
 ﻿/* ==========================================================================
-   youtube.js — pencarian YouTube (InnerTube) + resolver audio lokal (InnerTube)
-   Pencarian memakai API internal YouTube (InnerTube) lewat /api/search, tanpa
-   API key resmi. Lagu YouTube diputar sebagai audio lewat InnerTube di server;
-   metadata tautan diambil dari oEmbed resmi YouTube.
+   youtube.js — pencarian YouTube (InnerTube) + audio melalui proxy server
+   Pencarian memakai API internal YouTube (InnerTube) lewat /api/search.
+   Audio diputar di elemen audio aplikasi melalui /api/stream.
    ========================================================================== */
 
 (function (AM) {
@@ -343,7 +342,7 @@
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (!data) return false;
-        return !!(data.innertube || data.INNER_TUBE || data.innerTube || data.status === "ok");
+        return !!(data.innertube || data.ytdlp || data.INNER_TUBE || data.innerTube || data.status === "ok");
       })
       .catch(() => false)
       .then((available) => {

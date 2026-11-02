@@ -1,14 +1,35 @@
-// Helper bersama untuk fungsi /api (file berawalan _ tidak dijadikan endpoint).
+// Audio Vercel memakai yt-dlp; InnerTube tetap dipakai untuk radio.
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { execFile } = require("child_process");
+
 const ID = /^[A-Za-z0-9_-]{11}$/;
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-const MAX_AUDIO_CACHE = 200;
-const audioCache = new Map();
+const MAX_AUDIO_CACHE = 12;
+const MAX_AUDIO_CACHE_BYTES = 180 * 1024 * 1024;
+const MAX_AUDIO_URL_CACHE = 200;
+const audioFiles = new Map();
+const audioFileTasks = new Map();
+const audioUrls = new Map();
+const FORMATS = {
+  low: "bestaudio[abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio",
+  medium: "bestaudio[abr<=128]/bestaudio[ext=m4a]/bestaudio",
+  high: "bestaudio[abr<=192]/bestaudio[ext=m4a]/bestaudio",
+  best: "bestaudio/bestaudio[ext=m4a]"
+};
+const BIN = process.env.YTDLP_PATH || path.join(os.tmpdir(), process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp");
+const BIN_URL =
+  "https://github.com/yt-dlp/yt-dlp/releases/latest/download/" +
+  (process.platform === "win32"
+    ? "yt-dlp.exe"
+    : process.platform === "darwin"
+      ? "yt-dlp_macos"
+      : "yt-dlp_linux");
+let binTask = null;
 
-// Klien yang saat ini masih memberi URL audio langsung (tanpa PO token).
-// Catatan: context.client.platform harus nama hardware yang valid
-// ("MOBILE"/"DESKTOP"), bukan nama klien seperti "IOS" — nilai itu ditolak
-// API dengan HTTP 400 sehingga resolusi audio selalu gagal.
+// Klien InnerTube untuk radio; resolver audio Vercel menggunakan yt-dlp.
 const INNER_TUBE_CLIENTS = [
   {
     id: "ANDROID",
@@ -30,25 +51,114 @@ const INNER_TUBE_CLIENTS = [
   }
 ];
 
-const qualityOf = (q) => (q === "low" || q === "medium" || q === "high" || q === "best" ? q : "best");
+const qualityOf = (q) => (FORMATS[q] ? q : "best");
+
+async function ensureBinary() {
+  if (process.env.YTDLP_PATH) return BIN;
+  if (binTask) return binTask;
+  binTask = (async () => {
+    if (fs.existsSync(BIN) && fs.statSync(BIN).size > 1e6) return BIN;
+    const response = await fetch(BIN_URL, { redirect: "follow" });
+    if (!response.ok) throw new Error("Gagal mengunduh yt-dlp (HTTP " + response.status + ")");
+    const binary = Buffer.from(await response.arrayBuffer());
+    if (binary.length < 1e6) throw new Error("Unduhan binary yt-dlp tidak lengkap");
+
+    const temporary = BIN + "." + process.pid + "." + Date.now() + ".part";
+    try {
+      fs.writeFileSync(temporary, binary, { mode: 0o755 });
+      try {
+        fs.renameSync(temporary, BIN);
+      } catch (error) {
+        if (!fs.existsSync(BIN)) throw error;
+      }
+      if (process.platform !== "win32") fs.chmodSync(BIN, 0o755);
+      return BIN;
+    } finally {
+      if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    }
+  })().catch((error) => {
+    binTask = null;
+    throw error;
+  });
+  return binTask;
+}
+
+async function run(args, timeout) {
+  const binary = await ensureBinary();
+  const base = ["--no-cache-dir", "--no-warnings"];
+  const execute = (extra) =>
+    new Promise((resolve, reject) => {
+      execFile(
+        binary,
+        extra.concat(base, args),
+        {
+          timeout: timeout || 45000,
+          maxBuffer: 10 * 1024 * 1024,
+          env: Object.assign({}, process.env, { TMPDIR: os.tmpdir(), HOME: os.tmpdir() })
+        },
+        (error, stdout, stderr) => {
+          if (error) {
+            const text = String(stderr || "");
+            const failure = new Error(text.trim().split("\n").pop() || error.message);
+            failure.stderr = text;
+            return reject(failure);
+          }
+          resolve(stdout);
+        }
+      );
+    });
+
+  if (process.env.YTDLP_NO_JS_RUNTIME) return execute([]);
+  try {
+    return await execute(["--js-runtimes", "node:" + process.execPath]);
+  } catch (error) {
+    if (/js-runtimes|no such option|unrecognized/i.test(error.stderr || "")) return execute([]);
+    throw error;
+  }
+}
+
+function removeAudioFile(entry) {
+  try {
+    if (entry && entry.path && fs.existsSync(entry.path)) fs.unlinkSync(entry.path);
+  } catch (error) {
+    console.warn("[yt-dlp] gagal membersihkan cache audio:", error);
+  }
+}
+
+function cleanupAudioPrefix(prefix) {
+  try {
+    const base = path.basename(prefix);
+    for (const name of fs.readdirSync(os.tmpdir())) {
+      if (name.startsWith(base + ".")) removeAudioFile({ path: path.join(os.tmpdir(), name) });
+    }
+  } catch (error) {
+    console.warn("[yt-dlp] gagal membersihkan file sementara:", error);
+  }
+}
 
 function trimAudioCache() {
-  while (audioCache.size > MAX_AUDIO_CACHE) {
-    const first = audioCache.keys().next();
+  let totalBytes = Array.from(audioFiles.values()).reduce((sum, entry) => sum + entry.size, 0);
+  while (audioFiles.size > MAX_AUDIO_CACHE || (totalBytes > MAX_AUDIO_CACHE_BYTES && audioFiles.size > 1)) {
+    const first = audioFiles.entries().next();
     if (first.done) break;
-    audioCache.delete(first.value);
+    audioFiles.delete(first.value[0]);
+    totalBytes -= first.value[1].size;
+    removeAudioFile(first.value[1]);
   }
 }
 
 function expiresFromUrl(rawUrl) {
-  try {
-    const url = new URL(rawUrl);
-    const value = Number(url.searchParams.get("expire") || "0");
-    if (Number.isFinite(value) && value > 0) return value;
-  } catch (error) {
-    // Abaikan URL yang tidak valid; fallback di bawah.
+  const parsed = new URL(rawUrl);
+  const value = Number(parsed.searchParams.get("expire") || "0");
+  return Number.isFinite(value) && value > 0 ? value : Math.floor(Date.now() / 1000) + 3600;
+}
+
+function trimAudioUrlCache() {
+  while (audioUrls.size > MAX_AUDIO_URL_CACHE) {
+    const first = audioUrls.keys().next();
+    if (first.done) break;
+    audioUrls.delete(first.value);
   }
-  return Math.floor(Date.now() / 1000) + 3600;
 }
 
 function makeClientPayload(client) {
@@ -107,86 +217,122 @@ async function innertube(endpoint, body, client) {
 }
 
 async function getAudioUrl(id, quality, force) {
+  if (!ID.test(String(id || ""))) throw new Error("ID video tidak valid");
+  const mode = qualityOf(quality);
+  const key = String(id) + "|" + mode;
+  const now = Math.floor(Date.now() / 1000);
+  if (force) audioUrls.delete(key);
+  const cached = audioUrls.get(key);
+  if (cached && cached.expires > now + 300) return cached;
+
+  const output = await run(
+    [
+      "-f",
+      FORMATS[mode],
+      "--dump-single-json",
+      "--skip-download",
+      "--no-playlist",
+      "https://www.youtube.com/watch?v=" + id
+    ],
+    45000
+  );
+  const result = JSON.parse(String(output));
+  const url = String((result && result.url) || "").trim();
+  if (!url || !isAllowed(url)) throw new Error("yt-dlp tidak mengembalikan URL audio yang valid");
+  const rawUserAgent = result && result.http_headers && result.http_headers["User-Agent"];
+  const entry = {
+    url,
+    headers: typeof rawUserAgent === "string" ? { "User-Agent": rawUserAgent } : {},
+    expires: expiresFromUrl(url)
+  };
+  audioUrls.set(key, entry);
+  trimAudioUrlCache();
+  return entry;
+}
+
+async function getAudioFile(id, quality, force) {
   if (!ID.test(String(id || ""))) {
     throw new Error("ID video tidak valid");
   }
 
   const mode = qualityOf(quality);
-  const key = id + "|" + mode;
-  const now = Math.floor(Date.now() / 1000);
-  if (force) audioCache.delete(key);
-  const cached = audioCache.get(key);
-  if (cached && Number(cached.expires) > now + 300) return cached;
+  const key = String(id) + "|" + mode;
+  if (force) {
+    const cached = audioFiles.get(key);
+    audioFiles.delete(key);
+    removeAudioFile(cached);
+  }
+  const cached = audioFiles.get(key);
+  if (cached && fs.existsSync(cached.path)) {
+    audioFiles.delete(key);
+    audioFiles.set(key, cached);
+    return cached;
+  }
+  if (cached) audioFiles.delete(key);
+  if (audioFileTasks.has(key)) return audioFileTasks.get(key);
 
-  const limits = { low: 96000, medium: 128000, high: 192000, best: Infinity };
-  const limit = limits[mode] || Infinity;
-  const failures = [];
-
-  for (const client of INNER_TUBE_CLIENTS) {
+  const task = (async () => {
+    const prefix = path.join(os.tmpdir(), "yt-audio-" + id + "-" + mode + "-" + process.pid + "-" + Date.now());
     try {
-      const data = await innertube(
-        "player",
-        {
-          videoId: id,
-          contentCheckOk: true,
-          racyCheckOk: true
-        },
-        client
+      const output = await run(
+        [
+          "-f",
+          FORMATS[mode],
+          "--no-playlist",
+          "--print",
+          "after_move:filepath",
+          "-o",
+          prefix + ".%(ext)s",
+          "https://www.youtube.com/watch?v=" + id
+        ],
+        45000
       );
+      const outputPath = String(output)
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.startsWith(prefix + ".") && fs.existsSync(line));
+      if (!outputPath) throw new Error("yt-dlp tidak menghasilkan file audio");
 
-      const play = (data && data.playabilityStatus) || {};
-      if (play.status && play.status !== "OK") {
-        failures.push(client.clientName + ": " + play.status + " " + (play.reason || ""));
-        continue;
-      }
-
-      const formats = Array.isArray(data && data.streamingData && data.streamingData.adaptiveFormats)
-        ? data.streamingData.adaptiveFormats
-        : [];
-      const candidates = formats.filter((format) => {
-        if (!format || typeof format.mimeType !== "string") return false;
-        if (!format.mimeType.startsWith("audio/")) return false;
-        if (typeof format.url !== "string" || !format.url) return false;
-        try {
-          const url = new URL(format.url);
-          return url.protocol === "https:";
-        } catch (error) {
-          return false;
-        }
-      });
-
-      if (!candidates.length) continue;
-
-      const sorted = candidates.slice().sort((left, right) => {
-        // Utamakan WebM/Opus: didukung Chrome, Edge, Firefox, dan Safari
-        // modern, termasuk Chromium tanpa codec AAC. MP4/AAC tetap dipakai
-        // bila tidak ada pilihan WebM.
-        const leftWebm = /audio\/webm/i.test(String(left.mimeType));
-        const rightWebm = /audio\/webm/i.test(String(right.mimeType));
-        if (leftWebm !== rightWebm) return leftWebm ? -1 : 1;
-        return (Number(right.bitrate) || 0) - (Number(left.bitrate) || 0);
-      });
-      const allowed = sorted.filter((format) => (Number(format.bitrate) || 0) <= limit);
-      const chosen = allowed.length ? allowed[0] : sorted[0];
-      if (!chosen || typeof chosen.url !== "string") continue;
+      const stat = fs.statSync(outputPath);
+      if (!stat.isFile() || stat.size <= 0) throw new Error("File audio hasil yt-dlp kosong");
 
       const entry = {
-        url: chosen.url,
-        expires: expiresFromUrl(chosen.url)
+        path: outputPath,
+        size: stat.size,
+        contentType: contentTypeFor(outputPath),
+        expires: Math.floor(Date.now() / 1000) + 86400
       };
-      audioCache.set(key, entry);
+      audioFiles.set(key, entry);
       trimAudioCache();
       return entry;
     } catch (error) {
-      // Coba client berikutnya bila satu klien gagal.
-      failures.push(client.clientName + ": " + (error && error.message ? error.message : error));
+      cleanupAudioPrefix(prefix);
+      throw error;
     }
-  }
+  })().finally(() => {
+    audioFileTasks.delete(key);
+  });
+  audioFileTasks.set(key, task);
+  return task;
+}
 
-  throw new Error(
-    "Audio YouTube tidak tersedia saat ini." +
-      (failures.length ? " (" + failures.join(" | ") + ")" : "")
-  );
+function contentTypeFor(filePath) {
+  switch (path.extname(filePath).toLowerCase()) {
+    case ".m4a":
+    case ".mp4":
+      return "audio/mp4";
+    case ".mp3":
+      return "audio/mpeg";
+    case ".ogg":
+    case ".opus":
+      return "audio/ogg";
+    case ".wav":
+      return "audio/wav";
+    case ".webm":
+      return "audio/webm";
+    default:
+      return "application/octet-stream";
+  }
 }
 
 function isAllowed(raw) {
@@ -202,8 +348,10 @@ const lib = {
   ID,
   UA,
   qualityOf,
+  run,
   innertube,
   getAudioUrl,
+  getAudioFile,
   isAllowed
 };
 

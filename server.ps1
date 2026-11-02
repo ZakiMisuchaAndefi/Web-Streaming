@@ -1,5 +1,5 @@
 # ==========================================================================
-# server.ps1 - server statis kecil + resolver audio lokal (InnerTube).
+# server.ps1 - server statis kecil + resolver audio lokal (yt-dlp).
 # Jalankan dari PowerShell:  .\server.ps1
 # Lalu buka:                 http://127.0.0.1:4173/
 #
@@ -277,10 +277,8 @@ function Get-Mp3Quality($quality) {
 }
 
 # --------------------------------------------------------------------------
-# InnerTube (API internal YouTube) — pencarian, audio, dan radio.
-# Referensi: https://github.com/tombulled/innertube
-# Logika dijalankan lewat scripts/innertube-cli.js (Node) supaya sama dengan
-# fungsi /api di Vercel.
+# yt-dlp untuk audio; InnerTube untuk pencarian dan radio.
+# Semua proses Node dijalankan lewat scripts/innertube-cli.js.
 # --------------------------------------------------------------------------
 
 function Test-InnerTubeResolver {
@@ -319,7 +317,7 @@ function Invoke-InnertubeCli([string[]]$CliArgs, [int]$TimeoutMs) {
 
     if (-not $process.WaitForExit($TimeoutMs)) {
       try { $process.Kill() } catch { }
-      return @{ Status = 504; Error = "InnerTube melebihi batas waktu" }
+      return @{ Status = 504; Error = "Resolver audio melebihi batas waktu" }
     }
 
     $stdout = $stdoutTask.Result
@@ -327,7 +325,7 @@ function Invoke-InnertubeCli([string[]]$CliArgs, [int]$TimeoutMs) {
 
     if ($process.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($stdout)) {
       $lines = @($stderr -split "`r?`n" | Where-Object { $_.Trim() -ne "" })
-      $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1].Trim() } else { "InnerTube gagal (kode $($process.ExitCode))" }
+      $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1].Trim() } else { "Resolver gagal (kode $($process.ExitCode))" }
       return @{ Status = 502; Error = $last }
     }
 
@@ -354,14 +352,14 @@ function Invoke-InnerTubeSearch($query) {
 }
 
 function Invoke-INNER_TUBE($videoId, $quality) {
-  $result = Invoke-InnertubeCli @("audio", $videoId, $quality) 20000
+  $result = Invoke-InnertubeCli @("audio", $videoId, $quality) 60000
   if ($result.Status -ne 200) {
     return @{ Status = $result.Status; Error = $result.Error }
   }
 
   $url = [string]$result.Output
   if ($url -notmatch '^https?://') {
-    return @{ Status = 502; Error = "InnerTube tidak mengembalikan URL audio" }
+    return @{ Status = 502; Error = "yt-dlp tidak mengembalikan URL audio" }
   }
 
   $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
@@ -635,7 +633,7 @@ Write-Host ""
 Write-Host "  Musik - server lokal" -ForegroundColor Red
 Write-Host "  http://127.0.0.1:$Port/" -ForegroundColor White
 if (Test-InnerTubeResolver) {
-  Write-Host "  Audio resolver: InnerTube (Node) siap" -ForegroundColor Green
+  Write-Host "  Audio resolver: yt-dlp (Node) siap" -ForegroundColor Green
 } else {
   Write-Host "  Audio resolver: Node.js/scripts/innertube-cli.js tidak ditemukan (lagu YouTube nonaktif)" -ForegroundColor Yellow
 }

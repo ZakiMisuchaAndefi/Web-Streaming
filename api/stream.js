@@ -1,3 +1,4 @@
+const fs = require("fs");
 const { Readable } = require("stream");
 const lib = require("./_lib");
 
@@ -5,7 +6,7 @@ const lib = require("./_lib");
 // jadi fungsi tidak kena batas waktu dan batas ukuran respons Vercel.
 const CHUNK = 2 * 1024 * 1024;
 
-async function fetchAllowedRange(target, range) {
+async function fetchAllowedRange(target, range, userAgent) {
   let current = target;
   let redirects = 0;
   while (true) {
@@ -14,7 +15,7 @@ async function fetchAllowedRange(target, range) {
       redirect: "manual",
       headers: {
         Range: range,
-        "User-Agent": lib.UA
+        "User-Agent": userAgent || lib.UA
       }
     });
 
@@ -39,6 +40,58 @@ async function fetchAllowedRange(target, range) {
   }
 }
 
+function streamAudioFile(req, res, entry) {
+  const total = entry.size;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ""));
+  let start = m && m[1] ? Number(m[1]) : 0;
+  let askedEnd = m && m[2] ? Number(m[2]) : Infinity;
+
+  if (m && m[1] === "" && m[2] !== "") {
+    const suffix = Number(m[2]);
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) {
+      res.statusCode = 416;
+      res.setHeader("Content-Range", "bytes */" + total);
+      res.setHeader("Accept-Ranges", "bytes");
+      return res.end();
+    }
+    start = Math.max(0, total - Math.min(suffix, CHUNK));
+    askedEnd = total - 1;
+  }
+
+  if (!Number.isSafeInteger(start) || start < 0 || start >= total) {
+    res.statusCode = 416;
+    res.setHeader("Content-Range", "bytes */" + total);
+    res.setHeader("Accept-Ranges", "bytes");
+    return res.end();
+  }
+
+  if (askedEnd < start) {
+    res.statusCode = 416;
+    res.setHeader("Content-Range", "bytes */" + total);
+    res.setHeader("Accept-Ranges", "bytes");
+    return res.end();
+  }
+
+  const end = Math.min(askedEnd, start + CHUNK - 1, total - 1);
+  res.statusCode = 206;
+  res.setHeader("Content-Type", entry.contentType);
+  res.setHeader("Content-Length", String(end - start + 1));
+  res.setHeader("Content-Range", "bytes " + start + "-" + end + "/" + total);
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Cache-Control", "no-store");
+  if (req.method === "HEAD") return res.end();
+
+  const body = fs.createReadStream(entry.path, { start, end });
+  res.on("close", () => {
+    if (!res.writableEnded) body.destroy();
+  });
+  body.on("error", (error) => {
+    console.error("[stream] gagal membaca cache audio:", error);
+    if (!res.destroyed) res.destroy();
+  });
+  body.pipe(res);
+}
+
 module.exports = async (req, res) => {
   let target = String(req.query.u || "");
   const videoId = String(req.query.id || "");
@@ -46,10 +99,10 @@ module.exports = async (req, res) => {
     if (!lib.ID.test(videoId)) return res.status(400).send("ID video tidak valid");
     try {
       const quality = lib.qualityOf(req.query.quality);
-      const entry = await lib.getAudioUrl(videoId, quality);
-      target = entry.url;
+      const entry = await lib.getAudioFile(videoId, quality);
+      return streamAudioFile(req, res, entry);
     } catch (error) {
-      console.error("[stream] gagal mendapatkan URL audio:", error);
+      console.error("[stream] gagal menyiapkan audio:", error);
       return res.status(502).json({ error: "Layanan audio tidak tersedia saat ini." });
     }
   }
@@ -81,7 +134,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const upstream = await fetchAllowedRange(target, range);
+    const upstream = await fetchAllowedRange(target, range, lib.UA);
     if (!upstream.ok && upstream.status !== 416) {
       console.error("[stream] Google Video menolak permintaan audio:", upstream.status);
       await upstream.body?.cancel();
