@@ -330,7 +330,7 @@
     }
     return AM.Youtube.checkLocalResolver().then((available) => {
       if (!available) {
-        toast("yt-dlp belum siap — lagu YouTube tidak bisa diputar.", {
+        toast("InnerTube belum siap — lagu YouTube tidak bisa diputar.", {
           type: "error",
           icon: "alert"
         });

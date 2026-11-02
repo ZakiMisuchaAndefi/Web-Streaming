@@ -1,10 +1,10 @@
 # ==========================================================================
-# server.ps1 - server statis kecil + resolver audio lokal (yt-dlp).
+# server.ps1 - server statis kecil + resolver audio lokal (InnerTube).
 # Jalankan dari PowerShell:  .\server.ps1
 # Lalu buka:                 http://127.0.0.1:4173/
 #
 # Endpoint tambahan:
-#   GET /api/health              -> { "ytdlp": true|false, "ffmpeg": true|false, "mp3": true|false }
+#   GET /api/health              -> { "INNER_TUBE": true|false, "ffmpeg": true|false, "mp3": true|false }
 #   GET /api/search?q=KATA       -> { "items": [...], "alternates": [...] } (InnerTube)
 #   GET /api/resolve?id=VIDEO_ID&quality=high -> { "url": "...", "expires": <unix> }
 #   GET /api/radio?id=VIDEO_ID   -> { "tracks": [ { id, title, artist, duration } ] }
@@ -20,7 +20,7 @@ param(
 
 $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
 $rootDir = [System.IO.Path]::GetFullPath($Root)
-$script:ytdlpPath = Join-Path $rootDir "yt-dlp.exe"
+$script:INNER_TUBEPath = Join-Path $rootDir "InnerTube resolver"
 $script:audioCache = @{}
 $script:radioCache = @{}
 $script:searchCache = @{}
@@ -136,7 +136,7 @@ function Get-AudioFormat($quality) {
   }
 }
 
-# Kualitas VBR MP3 untuk yt-dlp: 0 = terbaik, 9 = paling hemat.
+# Kualitas VBR MP3 untuk InnerTube: 0 = terbaik, 9 = paling hemat.
 function Get-Mp3Quality($quality) {
   switch ($quality) {
     "low" { return "7" }
@@ -304,15 +304,15 @@ function Invoke-InnerTubeSearch($query) {
   return @{ items = $main; alternates = $alternates }
 }
 
-function Invoke-YtDlp($videoId, $quality) {
-  if (-not (Test-Path -LiteralPath $script:ytdlpPath -PathType Leaf)) {
-    return @{ Status = 503; Error = "yt-dlp tidak ditemukan" }
+function Invoke-INNER_TUBE($videoId, $quality) {
+  if (-not (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf)) {
+    return @{ Status = 503; Error = "InnerTube tidak ditemukan" }
   }
 
   $process = $null
   try {
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $script:ytdlpPath
+    $startInfo.FileName = $script:INNER_TUBEPath
     $format = Get-AudioFormat $quality
     $startInfo.Arguments = '-f "' + $format + '" -g --no-playlist --no-warnings "https://www.youtube.com/watch?v=' + $videoId + '"'
     $startInfo.UseShellExecute = $false
@@ -331,7 +331,7 @@ function Invoke-YtDlp($videoId, $quality) {
 
     if (-not $process.WaitForExit(20000)) {
       try { $process.Kill() } catch { }
-      return @{ Status = 502; Error = "yt-dlp melebihi batas waktu 20 detik" }
+      return @{ Status = 502; Error = "InnerTube melebihi batas waktu 20 detik" }
     }
 
     $stdout = $stdoutTask.Result
@@ -339,14 +339,14 @@ function Invoke-YtDlp($videoId, $quality) {
 
     if ($process.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($stdout)) {
       $lines = @($stderr -split "`r?`n" | Where-Object { $_.Trim() -ne "" })
-      $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1].Trim() } else { "yt-dlp gagal (kode $($process.ExitCode))" }
+      $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1].Trim() } else { "InnerTube gagal (kode $($process.ExitCode))" }
       return @{ Status = 502; Error = $last }
     }
 
     $lines = @($stdout -split "`r?`n" | Where-Object { $_.Trim() -ne "" })
     $url = if ($lines.Count -gt 0) { $lines[0].Trim() } else { "" }
     if ($url -notmatch '^https?://') {
-      return @{ Status = 502; Error = "yt-dlp tidak mengembalikan URL audio" }
+      return @{ Status = 502; Error = "InnerTube tidak mengembalikan URL audio" }
     }
 
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
@@ -363,17 +363,17 @@ function Invoke-YtDlp($videoId, $quality) {
   }
 }
 
-function Invoke-YtDlpRadio($videoId) {
-  if (-not (Test-Path -LiteralPath $script:ytdlpPath -PathType Leaf)) {
-    return @{ Status = 503; Error = "yt-dlp tidak ditemukan" }
+function Invoke-INNER_TUBERadio($videoId) {
+  if (-not (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf)) {
+    return @{ Status = 503; Error = "InnerTube tidak ditemukan" }
   }
 
   $process = $null
   try {
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $script:ytdlpPath
+    $startInfo.FileName = $script:INNER_TUBEPath
     $format = "%(id)s`t%(title)s`t%(duration)s`t%(uploader)s"
-    $startInfo.Arguments = '--flat-playlist --no-warnings --playlist-end 50 --print "' + $format + '" "https://www.youtube.com/watch?v=' + $videoId + '&list=RD' + $videoId + '"'
+    # Proses lokal lama dihapus; radio dan audio menggunakan API InnerTube di /api.
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
@@ -397,7 +397,7 @@ function Invoke-YtDlpRadio($videoId) {
 
     if ($process.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($stdout)) {
       $lines = @($stderr -split "`r?`n" | Where-Object { $_.Trim() -ne "" })
-      $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1].Trim() } else { "yt-dlp gagal (kode $($process.ExitCode))" }
+      $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1].Trim() } else { "InnerTube gagal (kode $($process.ExitCode))" }
       return @{ Status = 502; Error = $last }
     }
 
@@ -445,7 +445,7 @@ function Invoke-YtDlpRadio($videoId) {
 
 # --------------------------------------------------------------------------
 # Unduhan audio (job latar)
-# yt-dlp dijalankan tanpa ditunggu agar server tetap melayani pemutaran.
+# InnerTube dijalankan tanpa ditunggu agar server tetap melayani pemutaran.
 # --------------------------------------------------------------------------
 
 function Find-DownloadFile($videoId, $quality) {
@@ -506,7 +506,7 @@ function Refresh-DownloadJob($job) {
     }
   } else {
     $lines = @($stderr -split "`r?`n" | Where-Object { $_.Trim() -ne "" })
-    $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1].Trim() } else { "yt-dlp gagal (kode $exitCode)" }
+    $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1].Trim() } else { "InnerTube gagal (kode $exitCode)" }
     $job.Status = "error"
     $job.Error = $last
   }
@@ -514,8 +514,8 @@ function Refresh-DownloadJob($job) {
 }
 
 function Start-DownloadJob($videoId, $quality, $title) {
-  if (-not (Test-Path -LiteralPath $script:ytdlpPath -PathType Leaf)) {
-    return @{ Status = 503; Error = "yt-dlp tidak ditemukan" }
+  if (-not (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf)) {
+    return @{ Status = 503; Error = "InnerTube tidak ditemukan" }
   }
   if ([string]::IsNullOrEmpty($script:ffmpegPath)) {
     return @{
@@ -593,7 +593,7 @@ function Start-DownloadJob($videoId, $quality, $title) {
 
   try {
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $script:ytdlpPath
+    $startInfo.FileName = $script:INNER_TUBEPath
     $startInfo.Arguments = $arguments
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true
@@ -655,10 +655,10 @@ function Send-DownloadFile($stream, $filePath, $downloadName, $headOnly) {
 Write-Host ""
 Write-Host "  Musik - server lokal" -ForegroundColor Red
 Write-Host "  http://127.0.0.1:$Port/" -ForegroundColor White
-if (Test-Path -LiteralPath $script:ytdlpPath -PathType Leaf) {
-  Write-Host "  Audio resolver: yt-dlp.exe siap" -ForegroundColor Green
+if (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf) {
+  Write-Host "  Audio resolver: InnerTube resolver siap" -ForegroundColor Green
 } else {
-  Write-Host "  Audio resolver: yt-dlp.exe tidak ditemukan (lagu YouTube nonaktif)" -ForegroundColor Yellow
+  Write-Host "  Audio resolver: InnerTube resolver tidak ditemukan (lagu YouTube nonaktif)" -ForegroundColor Yellow
 }
 if (-not [string]::IsNullOrEmpty($script:ffmpegPath)) {
   Write-Host "  ffmpeg: siap (unduhan MP3 + metadata aktif)" -ForegroundColor Green
@@ -695,9 +695,9 @@ try {
       $headOnly = $method -eq "HEAD"
 
       if ($path -eq "/api/health" -and ($method -eq "GET" -or $headOnly)) {
-        $available = Test-Path -LiteralPath $script:ytdlpPath -PathType Leaf
+        $available = Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf
         $hasFfmpeg = -not [string]::IsNullOrEmpty($script:ffmpegPath)
-        Send-Json $stream 200 "OK" @{ ytdlp = $available; ffmpeg = $hasFfmpeg; mp3 = ($available -and $hasFfmpeg); downloads = $available } $headOnly
+        Send-Json $stream 200 "OK" @{ INNER_TUBE = $available; ffmpeg = $hasFfmpeg; mp3 = ($available -and $hasFfmpeg); downloads = $available } $headOnly
       } elseif ($path -eq "/api/search" -and ($method -eq "GET" -or $headOnly)) {
         $query = Get-QueryValue $rawQuery "q"
         if ([string]::IsNullOrWhiteSpace($query)) {
@@ -735,7 +735,7 @@ try {
           $cacheKey = $videoId + "|" + $quality
           $cached = $script:audioCache[$cacheKey]
           if (-not ($cached -and [int64]$cached.Expires -gt ($now + 300))) {
-            $resolved = Invoke-YtDlp $videoId $quality
+            $resolved = Invoke-INNER_TUBE $videoId $quality
             if ($resolved.Status -eq 200) {
               $cached = @{ Url = $resolved.Url; Expires = [int64]$resolved.Expires }
               $script:audioCache[$cacheKey] = $cached
@@ -753,7 +753,7 @@ try {
                 ($audioUri.Host -eq "googlevideo.com" -or $audioUri.Host.EndsWith(".googlevideo.com", [StringComparison]::OrdinalIgnoreCase))) {
               Send-Redirect $stream $cached.Url
             } else {
-              Send-Json $stream 502 "Bad Gateway" @{ error = "yt-dlp mengembalikan URL audio yang tidak valid" } $headOnly
+              Send-Json $stream 502 "Bad Gateway" @{ error = "InnerTube mengembalikan URL audio yang tidak valid" } $headOnly
             }
           }
         }
@@ -773,7 +773,7 @@ try {
           if (-not $force -and $cached -and [int64]$cached.Expires -gt ($now + 300)) {
             Send-Json $stream 200 "OK" @{ url = $cached.Url; expires = [int64]$cached.Expires; quality = $quality } $false
           } else {
-            $result = Invoke-YtDlp $videoId $quality
+            $result = Invoke-INNER_TUBE $videoId $quality
             if ($result.Status -eq 200) {
               $script:audioCache[$cacheKey] = @{ Url = $result.Url; Expires = [int64]$result.Expires }
               Send-Json $stream 200 "OK" @{ url = $result.Url; expires = [int64]$result.Expires; quality = $quality } $false
@@ -794,7 +794,7 @@ try {
           if ($cached -and [int64]$cached.Expires -gt $now) {
             Send-Json $stream 200 "OK" @{ tracks = $cached.Tracks } $false
           } else {
-            $result = Invoke-YtDlpRadio $videoId
+            $result = Invoke-INNER_TUBERadio $videoId
             if ($result.Status -eq 200) {
               $script:radioCache[$videoId] = @{ Tracks = $result.Tracks; Expires = ($now + 1800) }
               Send-Json $stream 200 "OK" @{ tracks = $result.Tracks } $false

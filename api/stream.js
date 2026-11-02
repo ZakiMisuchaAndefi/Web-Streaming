@@ -5,6 +5,32 @@ const lib = require("./_lib");
 // jadi fungsi tidak kena batas waktu dan batas ukuran respons Vercel.
 const CHUNK = 2 * 1024 * 1024;
 
+async function fetchAllowedRange(target, range) {
+  let current = target;
+  while (true) {
+    const response = await fetch(current, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        Range: range,
+        "User-Agent": lib.UA
+      }
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) return response;
+      current = new URL(location, current).toString();
+      if (!lib.isAllowed(current)) {
+        throw new Error("URL redirect tidak valid");
+      }
+      continue;
+    }
+
+    return response;
+  }
+}
+
 module.exports = async (req, res) => {
   let target = String(req.query.u || "");
   const videoId = String(req.query.id || "");
@@ -14,8 +40,9 @@ module.exports = async (req, res) => {
       const quality = lib.qualityOf(req.query.quality);
       const entry = await lib.getAudioUrl(videoId, quality);
       target = entry.url;
-    } catch (e) {
-      return res.status(502).json({ error: e.message });
+    } catch (error) {
+      console.error("[stream] gagal mendapatkan URL audio:", error);
+      return res.status(502).json({ error: "Layanan audio tidak tersedia saat ini." });
     }
   }
   if (!lib.isAllowed(target)) return res.status(400).send("URL tidak valid");
@@ -31,7 +58,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const upstream = await fetch(target, { headers: { Range: range } });
+    const upstream = await fetchAllowedRange(target, range);
     res.statusCode = upstream.status;
     ["content-type", "content-length", "content-range"].forEach((h) => {
       const v = upstream.headers.get(h);
@@ -44,7 +71,8 @@ module.exports = async (req, res) => {
     req.on("close", () => body.destroy());
     body.on("error", () => res.end());
     body.pipe(res);
-  } catch (e) {
-    if (!res.headersSent) res.status(502).json({ error: e.message });
+  } catch (error) {
+    console.error("[stream] gagal streaming audio:", error);
+    if (!res.headersSent) res.status(502).json({ error: "Layanan audio tidak tersedia saat ini." });
   }
 };

@@ -290,7 +290,7 @@
       AM.Youtube.checkLocalResolver().then((available) => {
         if (!available) {
           toast(
-            "yt-dlp.exe tidak ditemukan — lagu YouTube tidak bisa diputar.",
+            "InnerTube resolver tidak ditemukan — lagu YouTube tidak bisa diputar.",
             { icon: "info", duration: 9000 }
           );
         }
@@ -671,7 +671,7 @@
 
       if (isYoutube) {
         // Satu toast per lagu. Kandidat cadangan sudah dicoba diam-diam
-        // oleh resolver audio yt-dlp.
+        // oleh resolver audio InnerTube.
         const failed = state.youtubeFailedIds || (state.youtubeFailedIds = new Set());
         if (track && track.id) failed.add(track.id);
 

@@ -1,6 +1,6 @@
 /* ==========================================================================
-   downloads.js — unduhan audio YouTube lewat yt-dlp di server lokal.
-   Server menjalankan yt-dlp sebagai proses latar; klien memantau statusnya
+   downloads.js — unduhan audio YouTube lewat InnerTube di server lokal.
+   Server menjalankan InnerTube sebagai proses latar; klien memantau statusnya
    lalu meminta browser menyimpan file hasil unduhan.
    ========================================================================== */
 
@@ -50,14 +50,14 @@
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         healthCache = {
-          ytdlp: !!(data && data.ytdlp),
+          innertube: !!(data && data.innertube),
           ffmpeg: !!(data && data.ffmpeg),
           at: Date.now()
         };
         return healthCache;
       })
       .catch(() => {
-        healthCache = { ytdlp: false, ffmpeg: false, at: Date.now() };
+        healthCache = { innertube: false, ffmpeg: false, at: Date.now() };
         return healthCache;
       })
       .then((value) => {
@@ -97,9 +97,9 @@
 
     const quality = qualityId || downloadQuality();
     const status = await health();
-    if (!status.ytdlp) {
+    if (!status.innertube) {
       toast(
-        "yt-dlp tidak tersedia di server. Coba lagi beberapa saat.",
+        "Layanan streaming tidak tersedia di server. Coba lagi beberapa saat.",
         { type: "error", duration: 9000 }
       );
       return null;

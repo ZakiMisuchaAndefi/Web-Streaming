@@ -13,7 +13,8 @@ module.exports = async (req, res) => {
       expires: entry.expires,
       quality
     });
-  } catch (e) {
-    res.status(502).json({ error: e.message });
+  } catch (error) {
+    console.error("[resolve] gagal membuat URL audio:", error);
+    res.status(502).json({ error: "Layanan audio tidak tersedia saat ini." });
   }
 };

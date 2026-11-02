@@ -1,7 +1,7 @@
 /* ==========================================================================
    online.js — musik online tanpa API key
    Sumber: YouTube — cari lagu dengan kata kunci, atau tempel tautan video.
-   Pemutaran memakai URL audio yang disiapkan yt-dlp melalui server aplikasi.
+   Pemutaran memakai URL audio yang disiapkan InnerTube melalui server aplikasi.
    ========================================================================== */
 
 (function (AM) {

@@ -6,11 +6,11 @@ echo.
 echo   Musik - menyiapkan server lokal...
 echo.
 
-if not exist "%~dp0yt-dlp.exe" (
-  echo   [INFO] yt-dlp.exe tidak ditemukan.
+if not exist "%~dp0InnerTube resolver" (
+  echo   [INFO] InnerTube resolver tidak ditemukan.
   echo   Semua lagu YouTube memerlukan file ini untuk diputar sebagai audio.
-  echo   Unduh di: https://github.com/yt-dlp/yt-dlp/releases/latest
-  echo   Letakkan yt-dlp.exe di folder ini, sejajar dengan server.ps1.
+  echo   Unduh di: https://github.com/InnerTube/InnerTube/releases/latest
+  echo   Letakkan InnerTube resolver di folder ini, sejajar dengan server.ps1.
   echo.
 )
 

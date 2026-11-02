@@ -1,114 +1,190 @@
 // Helper bersama untuk fungsi /api (file berawalan _ tidak dijadikan endpoint).
-const fs = require("fs");
-const { execFile } = require("child_process");
-
 const ID = /^[A-Za-z0-9_-]{11}$/;
-const FORMATS = {
-  low: "bestaudio[abr<=96]/bestaudio[ext=m4a][abr<=128]/bestaudio",
-  medium: "bestaudio[abr<=128]/bestaudio[ext=m4a]/bestaudio",
-  high: "bestaudio[abr<=192]/bestaudio[ext=m4a]/bestaudio",
-  best: "bestaudio/bestaudio[ext=m4a]"
-};
-const BIN = process.env.YTDLP_PATH || "/tmp/yt-dlp";
-const BIN_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux";
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const MAX_AUDIO_CACHE = 200;
 const audioCache = new Map();
 
-const qualityOf = (q) => (FORMATS[q] ? q : "best");
+const INNER_TUBE_CLIENTS = [
+  {
+    id: "ANDROID_VR",
+    clientName: "ANDROID_VR",
+    clientVersion: "1.60.19",
+    clientId: 28,
+    platform: "MOBILE",
+    hl: "en",
+    gl: "US"
+  },
+  {
+    id: "IOS",
+    clientName: "IOS",
+    clientVersion: "20.10.4",
+    clientId: 5,
+    platform: "IOS",
+    hl: "en",
+    gl: "US"
+  }
+];
 
-// yt-dlp (binary Linux) diunduh sekali ke /tmp, lalu dipakai ulang selama instance hidup.
-let binTask = null;
-function ensureBinary() {
-  if (process.env.YTDLP_PATH) return Promise.resolve(BIN);
-  if (binTask) return binTask;
-  binTask = (async () => {
-    if (fs.existsSync(BIN) && fs.statSync(BIN).size > 1e6) return BIN;
-    const res = await fetch(BIN_URL, { redirect: "follow" });
-    if (!res.ok) throw new Error("Gagal mengunduh yt-dlp (HTTP " + res.status + ")");
-    const buf = Buffer.from(await res.arrayBuffer());
-    fs.writeFileSync(BIN + ".part", buf, { mode: 0o755 });
-    fs.renameSync(BIN + ".part", BIN);
-    fs.chmodSync(BIN, 0o755);
-    return BIN;
-  })().catch((e) => {
-    binTask = null;
-    throw e;
-  });
-  return binTask;
-}
+const qualityOf = (q) => (q === "low" || q === "medium" || q === "high" || q === "best" ? q : "best");
 
-// Opsional: isi env YT_COOKIES dengan isi cookies.txt jika kena "Sign in to confirm you are not a bot".
-function cookieArgs() {
-  const raw = process.env.YT_COOKIES;
-  if (!raw) return [];
-  const p = "/tmp/yt-cookies.txt";
-  try {
-    if (!fs.existsSync(p)) fs.writeFileSync(p, raw.replace(/\\n/g, "\n"));
-    return ["--cookies", p];
-  } catch (e) {
-    return [];
+function trimAudioCache() {
+  while (audioCache.size > MAX_AUDIO_CACHE) {
+    const first = audioCache.keys().next();
+    if (first.done) break;
+    audioCache.delete(first.value);
   }
 }
 
-async function run(args, timeout) {
-  const bin = await ensureBinary();
-  const base = ["--no-cache-dir", "--no-warnings"].concat(cookieArgs());
-  const attempt = (extra) =>
-    new Promise((resolve, reject) => {
-      execFile(
-        bin,
-        extra.concat(base, args),
-        { timeout, maxBuffer: 10 * 1024 * 1024, env: Object.assign({}, process.env, { TMPDIR: "/tmp", HOME: "/tmp" }) },
-        (err, stdout, stderr) => {
-          if (err) {
-            const text = String(stderr || "");
-            const e = new Error(text.trim().split("\n").pop() || err.message);
-            e.stderr = text;
-            return reject(e);
-          }
-          resolve(stdout);
-        }
-      );
-    });
-  if (process.env.YTDLP_NO_JS_RUNTIME) return attempt([]);
+function expiresFromUrl(rawUrl) {
   try {
-    return await attempt(["--js-runtimes", "node:" + process.execPath]);
-  } catch (e) {
-    if (/js-runtimes|no such option|unrecognized/i.test(e.stderr || "")) return attempt([]);
-    throw e;
+    const url = new URL(rawUrl);
+    const value = Number(url.searchParams.get("expire") || "0");
+    if (Number.isFinite(value) && value > 0) return value;
+  } catch (error) {
+    // Abaikan URL yang tidak valid; fallback di bawah.
+  }
+  return Math.floor(Date.now() / 1000) + 3600;
+}
+
+function makeClientPayload(client) {
+  return {
+    context: {
+      client: {
+        clientName: client.clientName,
+        clientVersion: client.clientVersion,
+        clientScreen: "WATCH",
+        platform: client.platform,
+        hl: client.hl,
+        gl: client.gl
+      }
+    }
+  };
+}
+
+async function innertube(endpoint, body, client) {
+  const cfg = client || INNER_TUBE_CLIENTS[0];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(
+      "https://youtubei.googleapis.com/youtubei/v1/" + endpoint + "?prettyPrint=false",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "User-Agent": UA,
+          "X-YouTube-Client-Name": String(cfg.clientId),
+          "X-YouTube-Client-Version": cfg.clientVersion,
+          Referer: "https://www.youtube.com/",
+          "Accept-Language": "en-US,en;q=0.9"
+        },
+        signal: controller.signal,
+        body: JSON.stringify(Object.assign(makeClientPayload(cfg), body || {}))
+      }
+    );
+
+    const text = await response.text();
+    if (!response.ok) {
+      const message = text ? String(text).slice(0, 200) : "HTTP " + response.status;
+      throw new Error("InnerTube " + endpoint + " gagal (" + response.status + "): " + message);
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      return { raw: text };
+    }
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 async function getAudioUrl(id, quality, force) {
-  const key = id + "|" + quality;
+  if (!ID.test(String(id || ""))) {
+    throw new Error("ID video tidak valid");
+  }
+
+  const mode = qualityOf(quality);
+  const key = id + "|" + mode;
   const now = Math.floor(Date.now() / 1000);
   if (force) audioCache.delete(key);
   const cached = audioCache.get(key);
-  if (cached && cached.expires > now + 300) return cached;
-  const out = await run(
-    ["-f", FORMATS[quality], "-g", "--no-playlist", "https://www.youtube.com/watch?v=" + id],
-    45000
-  );
-  const url = out.split(/\r?\n/).map((l) => l.trim()).find(Boolean);
-  if (!url || !/^https?:\/\//.test(url)) throw new Error("yt-dlp tidak mengembalikan URL audio");
-  const m = url.match(/[?&]expire=(\d+)/);
-  const entry = { url, expires: m ? Number(m[1]) : now + 3600 };
-  audioCache.set(key, entry);
-  return entry;
-}
+  if (cached && Number(cached.expires) > now + 300) return cached;
 
-// Hanya boleh meneruskan audio dari googlevideo.com (mencegah proxy terbuka).
-const lib = {
-  ID,
-  qualityOf,
-  run,
-  getAudioUrl,
-  isAllowed(raw) {
+  const limits = { low: 96000, medium: 128000, high: 192000, best: Infinity };
+  const limit = limits[mode] || Infinity;
+  let picked = null;
+
+  for (const client of INNER_TUBE_CLIENTS) {
     try {
-      const u = new URL(raw);
-      return u.protocol === "https:" && (u.hostname === "googlevideo.com" || u.hostname.endsWith(".googlevideo.com"));
-    } catch (e) {
-      return false;
+      const data = await innertube(
+        "player",
+        {
+          videoId: id,
+          contentCheckOk: true,
+          racyCheckOk: true
+        },
+        client
+      );
+
+      const formats = Array.isArray(data && data.streamingData && data.streamingData.adaptiveFormats)
+        ? data.streamingData.adaptiveFormats
+        : [];
+      const candidates = formats.filter((format) => {
+        if (!format || typeof format.mimeType !== "string") return false;
+        if (!format.mimeType.startsWith("audio/")) return false;
+        if (typeof format.url !== "string" || !format.url) return false;
+        try {
+          const url = new URL(format.url);
+          return url.protocol === "https:";
+        } catch (error) {
+          return false;
+        }
+      });
+
+      if (!candidates.length) continue;
+
+      const sorted = candidates.slice().sort((left, right) => {
+        return (Number(right.bitrate) || 0) - (Number(left.bitrate) || 0);
+      });
+      const allowed = sorted.filter((format) => (Number(format.bitrate) || 0) <= limit);
+      const chosen = allowed.length ? allowed[0] : sorted[0];
+      if (!chosen || typeof chosen.url !== "string") continue;
+
+      const entry = {
+        url: chosen.url,
+        expires: expiresFromUrl(chosen.url)
+      };
+      audioCache.set(key, entry);
+      trimAudioCache();
+      return entry;
+    } catch (error) {
+      // Coba client berikutnya bila satu klien gagal.
     }
   }
+
+  throw new Error("Audio YouTube tidak tersedia saat ini.");
+}
+
+function isAllowed(raw) {
+  try {
+    const u = new URL(raw);
+    return u.protocol === "https:" && (u.hostname === "googlevideo.com" || u.hostname.endsWith(".googlevideo.com"));
+  } catch (error) {
+    return false;
+  }
+}
+
+const lib = {
+  ID,
+  UA,
+  qualityOf,
+  innertube,
+  getAudioUrl,
+  isAllowed
 };
+
 module.exports = lib;

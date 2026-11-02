@@ -1,7 +1,7 @@
 ﻿/* ==========================================================================
-   youtube.js — pencarian YouTube (InnerTube) + resolver audio lokal (yt-dlp)
+   youtube.js — pencarian YouTube (InnerTube) + resolver audio lokal (InnerTube)
    Pencarian memakai API internal YouTube (InnerTube) lewat /api/search, tanpa
-   API key resmi. Lagu YouTube diputar sebagai audio lewat yt-dlp di server;
+   API key resmi. Lagu YouTube diputar sebagai audio lewat InnerTube di server;
    metadata tautan diambil dari oEmbed resmi YouTube.
    ========================================================================== */
 
@@ -325,8 +325,8 @@
   }
 
   /* ------------------------------------------------------------------------
-     Resolver audio lokal (yt-dlp lewat server.ps1)
-     Dipakai hanya untuk pemakaian pribadi di localhost. Jika yt-dlp atau
+     Resolver audio lokal (InnerTube lewat server.ps1)
+     Dipakai hanya untuk pemakaian pribadi di localhost. Jika InnerTube atau
      endpoint server tidak tersedia, lagu YouTube ditandai gagal (tanpa video).
      ------------------------------------------------------------------------ */
 
@@ -341,7 +341,7 @@
     if (resolverCheck) return resolverCheck;
     resolverCheck = fetchWithTimeout((window.API_BASE || "") + "/api/health", 45000)
       .then((response) => (response.ok ? response.json() : null))
-      .then((data) => !!(data && data.ytdlp))
+      .then((data) => !!(data && data.INNER_TUBE))
       .catch(() => false)
       .then((available) => {
         if (!available) resolverCheck = null; // jangan simpan hasil gagal, coba lagi nanti
@@ -534,7 +534,7 @@
 
   /* ------------------------------------------------------------------
      Kandidat cadangan per lagu
-     Video utama bisa saja gagal diambil yt-dlp (dihapus, dibatasi, dsb).
+     Video utama bisa saja gagal diambil InnerTube (dihapus, dibatasi, dsb).
      Untuk tiap lagu kita simpan daftar videoId kandidat: video utama +
      hingga CANDIDATES_MAX-1 video lain dari hasil pencarian yang sama
      yang judul/artisnya cocok. Resolver audio akan mencoba kandidat
