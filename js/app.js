@@ -728,12 +728,18 @@
       state.youtubeErrorToast = toast(message, { type: "error", duration: 5000 });
     });
     P.on("trackchange", (detail) => {
+      state.blockedNotified = false;
       if (state.youtubeSkipTimer) {
         window.clearTimeout(state.youtubeSkipTimer);
         state.youtubeSkipTimer = 0;
       }
       if (detail && detail.track && detail.track.provider === "youtube") return;
       state.youtubeFailedIds = new Set();
+    });
+    P.on("statechange", (detail) => {
+      if (detail && detail.isPlaying) {
+        state.blockedNotified = false;
+      }
     });
     P.on("blocked", () => {
       if (state.blockedNotified) return;
@@ -1239,7 +1245,12 @@
      ------------------------------------------------------------------------ */
 
   function bindPlayerControls() {
-    if (els.btnPlay) els.btnPlay.addEventListener("click", () => P.toggle());
+    if (els.btnPlay) {
+      els.btnPlay.addEventListener("click", () => {
+        state.blockedNotified = false;
+        P.toggle();
+      });
+    }
     if (els.btnPrev) els.btnPrev.addEventListener("click", () => P.prev());
     if (els.btnNext) els.btnNext.addEventListener("click", () => P.next(true));
     if (els.btnShuffle) els.btnShuffle.addEventListener("click", () => P.toggleShuffle());
