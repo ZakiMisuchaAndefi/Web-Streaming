@@ -289,10 +289,10 @@
     if (AM.Youtube && typeof AM.Youtube.checkLocalResolver === "function") {
       AM.Youtube.checkLocalResolver().then((available) => {
         if (!available) {
-          toast(
-            "InnerTube resolver tidak ditemukan — lagu YouTube tidak bisa diputar.",
-            { icon: "info", duration: 9000 }
-          );
+          toast("Layanan YouTube tidak tersedia saat ini. Beberapa lagu mungkin tidak bisa diputar.", {
+            icon: "info",
+            duration: 9000
+          });
         }
       });
     }

@@ -330,7 +330,7 @@
     }
     return AM.Youtube.checkLocalResolver().then((available) => {
       if (!available) {
-        toast("InnerTube belum siap — lagu YouTube tidak bisa diputar.", {
+        toast("Layanan YouTube saat ini tidak tersedia. Coba lagi nanti.", {
           type: "error",
           icon: "alert"
         });

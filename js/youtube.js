@@ -341,7 +341,10 @@
     if (resolverCheck) return resolverCheck;
     resolverCheck = fetchWithTimeout((window.API_BASE || "") + "/api/health", 45000)
       .then((response) => (response.ok ? response.json() : null))
-      .then((data) => !!(data && data.INNER_TUBE))
+      .then((data) => {
+        if (!data) return false;
+        return !!(data.innertube || data.INNER_TUBE || data.innerTube || data.status === "ok");
+      })
       .catch(() => false)
       .then((available) => {
         if (!available) resolverCheck = null; // jangan simpan hasil gagal, coba lagi nanti
