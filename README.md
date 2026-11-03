@@ -47,7 +47,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\server.ps1
 Lalu buka **http://127.0.0.1:4173/**.
 
 Tekan `Ctrl+C` di jendela PowerShell untuk menghentikan server.
-
+*lakukan jika diperlukan
 ### Vercel
 
 Repo ini juga siap di-deploy ke **Vercel** tanpa build step:
