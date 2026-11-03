@@ -6,7 +6,7 @@
   "use strict";
 
   const U = AM.Utils;
-  const audio = document.getElementById("audio");
+  const audio = AM.Media.create(document.getElementById("audio"));
 
   const state = {
     baseQueue: [],
@@ -1375,9 +1375,16 @@
       return;
     }
 
+    // Di mesin IFrame, mengulang ID yang sama tidak berguna: error berarti
+    // video itu memang tidak boleh diputar di luar YouTube.
+    const iframeEngine =
+      AM.Youtube &&
+      typeof AM.Youtube.getStreamEngine === "function" &&
+      AM.Youtube.getStreamEngine() === "iframe";
+
     if (track.audioRetrying) return;
     const retryCount = Number(track.audioRetryCount) || 0;
-    if (retryCount < 2 && AM.Youtube) {
+    if (retryCount < 2 && !iframeEngine && AM.Youtube) {
       track.audioRetrying = true;
       track.audioRetryCount = retryCount + 1;
       const sourceId = track.audioVideoId || track.sourceId;
@@ -1451,7 +1458,11 @@
     }
     emit("error", {
       track,
-      error: new Error("Audio lagu YouTube tidak dapat diambil.")
+      error: new Error(
+        iframeEngine
+          ? "Video ini tidak mengizinkan pemutaran di luar YouTube. Coba pilih hasil pencarian lain."
+          : "Audio lagu YouTube tidak dapat diambil."
+      )
     });
     state.isPlaying = false;
     emit("statechange", getState());

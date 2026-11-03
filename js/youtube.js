@@ -12,6 +12,19 @@
   const SEARCH_LIMIT = 40;
   const SEARCH_TIMEOUT = 18000;
 
+  // Mesin audio: "proxy" (resolver server, hanya untuk localhost) atau
+  // "iframe" (pemutar resmi YouTube di browser, dipakai di Vercel).
+  const ENGINE_OVERRIDE = (() => {
+    try {
+      const value = new URLSearchParams(window.location.search).get("engine");
+      return value === "iframe" || value === "proxy" ? value : "";
+    } catch (error) {
+      return "";
+    }
+  })();
+
+  let streamEngine = ENGINE_OVERRIDE || "unknown";
+
   const session = [];
 
   /* ------------------------------------------------------------------------
@@ -342,6 +355,9 @@
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (!data) return false;
+        if (!ENGINE_OVERRIDE && (data.engine === "iframe" || data.engine === "proxy")) {
+          streamEngine = data.engine;
+        }
         return !!(data.innertube || data.ytdlp || data.INNER_TUBE || data.innerTube || data.status === "ok");
       })
       .catch(() => false)
@@ -360,6 +376,7 @@
   function audioStreamUrl(videoId, options) {
     const id = String(videoId || "").trim();
     if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return "";
+    if (streamEngine === "iframe") return "yt:" + id;
     const force = options && options.force ? "&force=1" : "";
     return (
       (window.API_BASE || "") +
@@ -380,6 +397,7 @@
     const opts = options || {};
     const id = String(videoId || "").trim();
     if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
+    if (streamEngine === "iframe") return "yt:" + id;
     const quality = audioQuality();
     const cacheKey = id + "|" + quality;
 
@@ -706,6 +724,14 @@
     related,
     checkLocalResolver,
     search,
-    sessionTracks
+    sessionTracks,
+    getStreamEngine: () => streamEngine,
+    setStreamEngine(mode) {
+      if (mode === "iframe" || mode === "proxy") streamEngine = mode;
+      return streamEngine;
+    }
   };
+
+  // Ketahui mesin audio seawal mungkin supaya lagu pertama tidak salah jalur.
+  checkLocalResolver();
 })(window.AM = window.AM || {});

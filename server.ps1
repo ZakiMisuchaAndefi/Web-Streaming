@@ -699,7 +699,7 @@ try {
       if ($path -eq "/api/health" -and ($method -eq "GET" -or $headOnly)) {
         $available = Test-InnerTubeResolver
         $hasFfmpeg = -not [string]::IsNullOrEmpty($script:ffmpegPath)
-        Send-Json $stream 200 "OK" @{ INNER_TUBE = $available; ffmpeg = $hasFfmpeg; mp3 = ($available -and $hasFfmpeg); downloads = $available } $headOnly
+        Send-Json $stream 200 "OK" @{ INNER_TUBE = $available; ffmpeg = $hasFfmpeg; mp3 = ($available -and $hasFfmpeg); downloads = $available; engine = "proxy" } $headOnly
       } elseif ($path -eq "/api/search" -and ($method -eq "GET" -or $headOnly)) {
         $query = Get-QueryValue $rawQuery "q"
         if ([string]::IsNullOrWhiteSpace($query)) {
