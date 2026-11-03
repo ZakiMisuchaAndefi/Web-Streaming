@@ -65,7 +65,7 @@ function expiresFromUrl(rawUrl) {
    "Sign in to confirm you're not a bot".
    -------------------------------------------------------------------------- */
 
-function httpGetText(url, headers) {
+function httpGet(url, headers) {
   return new Promise((resolve, reject) => {
     const request = https.request(
       url,
@@ -95,13 +95,39 @@ function httpGetText(url, headers) {
 }
 
 async function loadBootstrap() {
-  const response = await httpGetText("https://www.youtube.com/", {
+  const baseHeaders = {
     "User-Agent": VISIONOS_UA,
     "Accept-Language": "en-us,en;q=0.5",
     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-  });
-  if (response.status !== 200) {
-    throw new Error("YouTube menolak permintaan sesi (HTTP " + response.status + ")");
+  };
+  const cookies = [];
+  let url = "https://www.youtube.com/";
+  let response = null;
+
+  // YouTube kadang membalas 302 (mis. ke halaman consent / domain lain).
+  // Ikuti redirect sambil mengumpulkan cookie-nya.
+  for (let hop = 0; hop < 4; hop += 1) {
+    const headers = Object.assign({}, baseHeaders);
+    if (cookies.length) headers.Cookie = cookies.join("; ");
+    response = await httpGet(url, headers);
+
+    for (const value of response.headers["set-cookie"] || []) {
+      const pair = String(value).split(";")[0];
+      if (!pair) continue;
+      const name = pair.split("=")[0];
+      if (!cookies.some((cookie) => cookie.split("=")[0] === name)) cookies.push(pair);
+    }
+
+    const location = response.headers.location;
+    if (response.status >= 300 && response.status < 400 && location) {
+      url = new URL(location, url).toString();
+      continue;
+    }
+    break;
+  }
+
+  if (!response || response.status !== 200) {
+    throw new Error("YouTube menolak permintaan sesi (HTTP " + (response ? response.status : 0) + ")");
   }
 
   const match = /"visitorData":"(.*?)"/.exec(response.body);
@@ -114,10 +140,6 @@ async function loadBootstrap() {
     }
   }
   if (!visitorData) throw new Error("visitorData tidak ditemukan pada halaman YouTube");
-
-  const cookies = (response.headers["set-cookie"] || [])
-    .map((value) => String(value).split(";")[0])
-    .filter(Boolean);
 
   return { visitorData, cookies, at: Date.now() };
 }
