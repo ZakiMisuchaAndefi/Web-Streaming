@@ -76,9 +76,24 @@ async function bootstrap() {
 
 const CLIENTS = [
   {
-    name: "WEB+pot",
+    name: "WEB+potVisitor",
     id: 1,
     version: "2.20250312.04.00",
+    binding: "visitor",
+    ua: WEB_UA,
+    client: {
+      clientName: "WEB",
+      clientVersion: "2.20250312.04.00",
+      clientScreen: "WATCH",
+      hl: "en",
+      gl: "US"
+    }
+  },
+  {
+    name: "WEB+potVid",
+    id: 1,
+    version: "2.20250312.04.00",
+    binding: "video",
     ua: WEB_UA,
     client: {
       clientName: "WEB",
@@ -92,6 +107,7 @@ const CLIENTS = [
     name: "ANDROID+pot",
     id: 3,
     version: "20.10.38",
+    binding: "video",
     ua: "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip",
     client: {
       clientName: "ANDROID",
@@ -200,17 +216,24 @@ module.exports = async (req, res) => {
     out.bootstrap = { error: String(error.message) };
   }
 
-  let poToken = null;
+  let tokens = { video: null, visitor: null };
   const startToken = Date.now();
   try {
-    poToken = await getPoToken(VIDEO_ID);
-    out.poToken = { ok: true, ms: Date.now() - startToken, length: poToken.length };
+    tokens.video = await getPoToken(VIDEO_ID);
+    if (boot.visitorData) tokens.visitor = await getPoToken(boot.visitorData);
+    out.poToken = {
+      ok: true,
+      ms: Date.now() - startToken,
+      length: tokens.video.length,
+      visitor: tokens.visitor ? tokens.visitor.length : null
+    };
   } catch (error) {
     out.poToken = { ok: false, ms: Date.now() - startToken, error: String(error.message).slice(0, 200) };
   }
 
   for (const spec of CLIENTS) {
     const row = { name: spec.name };
+    const poToken = tokens[spec.binding] || tokens.video;
     try {
       const result = await callPlayer(spec, boot, poToken);
       const data = result.data;
