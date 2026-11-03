@@ -1,10 +1,14 @@
 // Endpoint diagnosa sementara (dihapus setelah selesai).
-// Mencoba beberapa klien InnerTube dari server Vercel lalu melaporkan mana yang
-// menghasilkan URL audio yang bisa diambil penuh.
+// Menguji apakah PO token membuat permintaan player diterima dari IP Vercel.
 const https = require("https");
+const { getPoToken } = require("./_pottoken");
 
 const INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 const VIDEO_ID = "U3JaukDsceA";
+const WEB_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+const VISIONOS_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
 
 function once(url, options) {
   return new Promise((resolve, reject) => {
@@ -28,7 +32,7 @@ function once(url, options) {
         response.on("error", reject);
       }
     );
-    request.setTimeout(15000, () => request.destroy(new Error("timeout")));
+    request.setTimeout(20000, () => request.destroy(new Error("timeout")));
     request.on("error", reject);
     if (options.body) request.write(options.body);
     request.end();
@@ -40,15 +44,13 @@ async function bootstrap() {
   let url = "https://www.youtube.com/";
   let last = null;
   for (let hop = 0; hop < 4; hop += 1) {
-    const response = await once(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
-        "Accept-Language": "en-us,en;q=0.5",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        ...(cookies.length ? { Cookie: cookies.join("; ") } : {})
-      }
-    });
+    const headers = {
+      "User-Agent": WEB_UA,
+      "Accept-Language": "en-us,en;q=0.5",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    };
+    if (cookies.length) headers.Cookie = cookies.join("; ");
+    const response = await once(url, { headers });
     last = response;
     for (const value of response.headers["set-cookie"] || []) {
       const pair = String(value).split(";")[0];
@@ -69,109 +71,28 @@ async function bootstrap() {
       visitorData = match[1];
     }
   }
-  return { status: last ? last.status : 0, visitorData, cookies, hops: url };
+  return { visitorData, cookies };
 }
-
-const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
 
 const CLIENTS = [
   {
-    name: "VISIONOS",
-    id: 101,
-    version: "1.02",
-    platform: "MOBILE",
+    name: "WEB+pot",
+    id: 1,
+    version: "2.20250312.04.00",
+    ua: WEB_UA,
     client: {
-      clientName: "VISIONOS",
-      clientVersion: "1.02",
-      deviceMake: "Apple",
-      deviceModel: "RealityDevice17,1",
-      userAgent: UA,
-      osName: "visionOS",
-      osVersion: "26.5.23O471",
-      hl: "en",
-      timeZone: "UTC",
-      utcOffsetMinutes: 0
-    }
-  },
-  {
-    name: "ANDROID_VR",
-    id: 28,
-    version: "1.62.27",
-    platform: "MOBILE",
-    client: {
-      clientName: "ANDROID_VR",
-      clientVersion: "1.62.27",
-      deviceMake: "Oculus",
-      deviceModel: "Quest 3",
-      osName: "Android",
-      osVersion: "12",
-      androidSdkVersion: 32,
-      hl: "en",
-      gl: "US",
-      utcOffsetMinutes: 0
-    }
-  },
-  {
-    name: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
-    id: 85,
-    version: "2.0",
-    platform: "TV",
-    thirdParty: true,
-    client: {
-      clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
-      clientVersion: "2.0",
+      clientName: "WEB",
+      clientVersion: "2.20250312.04.00",
+      clientScreen: "WATCH",
       hl: "en",
       gl: "US"
     }
   },
   {
-    name: "WEB_EMBEDDED_PLAYER",
-    id: 56,
-    version: "1.20250310.01.00",
-    platform: "DESKTOP",
-    thirdParty: true,
-    client: {
-      clientName: "WEB_EMBEDDED_PLAYER",
-      clientVersion: "1.20250310.01.00",
-      clientScreen: "EMBED",
-      hl: "en",
-      gl: "US"
-    }
-  },
-  {
-    name: "TVHTML5",
-    id: 7,
-    version: "7.20250312.16.00",
-    platform: "TV",
-    client: {
-      clientName: "TVHTML5",
-      clientVersion: "7.20250312.16.00",
-      hl: "en",
-      gl: "US"
-    }
-  },
-  {
-    name: "IOS",
-    id: 5,
-    version: "20.10.4",
-    platform: "MOBILE",
-    client: {
-      clientName: "IOS",
-      clientVersion: "20.10.4",
-      deviceMake: "Apple",
-      deviceModel: "iPhone16,2",
-      osName: "iPhone",
-      osVersion: "17.5.1.21F90",
-      hl: "en",
-      gl: "US"
-    }
-  },
-  {
-    name: "ANDROID",
+    name: "ANDROID+pot",
     id: 3,
     version: "20.10.38",
-    platform: "MOBILE",
+    ua: "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip",
     client: {
       clientName: "ANDROID",
       clientVersion: "20.10.38",
@@ -183,24 +104,45 @@ const CLIENTS = [
     }
   },
   {
-    name: "MWEB",
-    id: 2,
-    version: "2.20240726.01.00",
-    platform: "MOBILE",
-    client: { clientName: "MWEB", clientVersion: "2.20240726.01.00", hl: "en", gl: "US" }
+    name: "VISIONOS+pot",
+    id: 101,
+    version: "1.02",
+    ua: VISIONOS_UA,
+    client: {
+      clientName: "VISIONOS",
+      clientVersion: "1.02",
+      deviceMake: "Apple",
+      deviceModel: "RealityDevice17,1",
+      userAgent: VISIONOS_UA,
+      osName: "visionOS",
+      osVersion: "26.5.23O471",
+      hl: "en",
+      timeZone: "UTC",
+      utcOffsetMinutes: 0
+    }
   },
   {
-    name: "WEB",
-    id: 1,
-    version: "2.20250312.04.00",
-    platform: "DESKTOP",
-    client: { clientName: "WEB", clientVersion: "2.20250312.04.00", clientScreen: "WATCH", hl: "en", gl: "US" }
+    name: "IOS+pot",
+    id: 5,
+    version: "20.10.4",
+    ua: "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)",
+    client: {
+      clientName: "IOS",
+      clientVersion: "20.10.4",
+      deviceMake: "Apple",
+      deviceModel: "iPhone16,2",
+      osName: "iPhone",
+      osVersion: "17.5.1.21F90",
+      hl: "en",
+      gl: "US"
+    }
   }
 ];
 
-async function callPlayer(spec, boot) {
+async function callPlayer(spec, boot, poToken) {
   const client = Object.assign({}, spec.client);
   if (boot.visitorData) client.visitorData = boot.visitorData;
+
   const body = {
     context: { client },
     videoId: VIDEO_ID,
@@ -210,14 +152,13 @@ async function callPlayer(spec, boot) {
     contentCheckOk: true,
     racyCheckOk: true
   };
-  if (spec.thirdParty) {
-    body.context.thirdParty = { embedUrl: "https://www.youtube.com/" };
-  }
+  if (poToken) body.serviceIntegrityDimensions = { poToken };
+
   const headers = {
     "Content-Type": "application/json",
     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-us,en;q=0.5",
-    "User-Agent": UA,
+    "User-Agent": spec.ua,
     "X-Youtube-Client-Name": String(spec.id),
     "X-Youtube-Client-Version": spec.version,
     Origin: "https://www.youtube.com"
@@ -238,11 +179,9 @@ async function callPlayer(spec, boot) {
   return { http: response.status, data };
 }
 
-async function probe(url) {
+async function probe(url, range, ua) {
   try {
-    const response = await once(url, {
-      headers: { Range: "bytes=0-1", "User-Agent": UA }
-    });
+    const response = await once(url, { headers: { Range: range, "User-Agent": ua } });
     return response.status;
   } catch (error) {
     return "ERR";
@@ -251,25 +190,29 @@ async function probe(url) {
 
 module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  const out = { bootstrap: null, clients: [] };
+  const out = { poToken: null, bootstrap: null, clients: [] };
+
   let boot = { visitorData: null, cookies: [] };
   try {
-    const b = await bootstrap();
-    boot = b;
-    out.bootstrap = {
-      status: b.status,
-      hasVisitor: !!b.visitorData,
-      cookies: b.cookies.length,
-      finalUrl: String(b.hops).slice(0, 80)
-    };
+    boot = await bootstrap();
+    out.bootstrap = { hasVisitor: !!boot.visitorData, cookies: boot.cookies.length };
   } catch (error) {
     out.bootstrap = { error: String(error.message) };
+  }
+
+  let poToken = null;
+  const startToken = Date.now();
+  try {
+    poToken = await getPoToken(VIDEO_ID);
+    out.poToken = { ok: true, ms: Date.now() - startToken, length: poToken.length };
+  } catch (error) {
+    out.poToken = { ok: false, ms: Date.now() - startToken, error: String(error.message).slice(0, 200) };
   }
 
   for (const spec of CLIENTS) {
     const row = { name: spec.name };
     try {
-      const result = await callPlayer(spec, boot);
+      const result = await callPlayer(spec, boot, poToken);
       const data = result.data;
       row.http = result.http;
       if (!data || !data.playabilityStatus) {
@@ -278,22 +221,23 @@ module.exports = async (req, res) => {
         continue;
       }
       row.status = data.playabilityStatus.status;
-      row.reason = String(data.playabilityStatus.reason || "").slice(0, 80);
+      row.reason = String(data.playabilityStatus.reason || "").slice(0, 70);
       const formats = (data.streamingData && data.streamingData.adaptiveFormats) || [];
       const audio = formats.filter((f) => String(f.mimeType || "").startsWith("audio/") && f.url);
       row.audio = audio.length;
       if (audio.length) {
         const pick = audio.find((f) => /webm/i.test(f.mimeType)) || audio[0];
-        const q = new URL(pick.url).searchParams;
+        let target = pick.url;
+        const q = new URL(target).searchParams;
         row.c = q.get("c");
-        row.n = q.get("n") ? "yes" : null;
-        row.pot = q.get("pot") ? "yes" : null;
-        row.itag = pick.itag;
-        row.range0 = await probe(pick.url);
+        row.potInUrl = q.get("pot") ? "yes" : null;
+        if (poToken && !q.get("pot")) target += "&pot=" + encodeURIComponent(poToken);
+        row.range0 = await probe(target, "bytes=0-1", spec.ua);
+        row.range3m = await probe(target, "bytes=3000000-3000001", spec.ua);
       }
     } catch (error) {
       row.status = "ERROR";
-      row.reason = String(error.message).slice(0, 80);
+      row.reason = String(error.message).slice(0, 70);
     }
     out.clients.push(row);
   }
