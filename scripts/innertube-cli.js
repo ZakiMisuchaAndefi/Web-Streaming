@@ -24,7 +24,7 @@ async function main() {
     const id = String(args[0] || "").trim();
     const quality = lib.qualityOf(args[1]);
     const entry = await lib.getAudioUrl(id, quality, true);
-    process.stdout.write(entry.url);
+    process.stdout.write(JSON.stringify(entry));
     return;
   }
 

@@ -1381,7 +1381,7 @@
       track.audioRetrying = true;
       track.audioRetryCount = retryCount + 1;
       const sourceId = track.audioVideoId || track.sourceId;
-      let url = null;
+      let streamUrl = "";
       await new Promise((resolve) => {
         window.setTimeout(resolve, retryCount === 0 ? 500 : 1200);
       });
@@ -1390,16 +1390,16 @@
         return;
       }
       try {
-        url = await AM.Youtube.resolveAudio(sourceId, { force: true });
+        streamUrl = AM.Youtube.audioStreamUrl(sourceId, { force: true });
       } catch (error) {
-        url = null;
+        streamUrl = "";
       }
       if (state.loadToken !== token || state.currentId !== trackId) {
         track.audioRetrying = false;
         return;
       }
-      if (url) {
-        audio.src = url;
+      if (streamUrl) {
+        audio.src = streamUrl;
         audio.load();
         track.audioRetrying = false;
         try {

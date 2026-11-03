@@ -357,15 +357,17 @@
     return ["low", "medium", "high", "best"].includes(value) ? value : "high";
   }
 
-  function audioStreamUrl(videoId) {
+  function audioStreamUrl(videoId, options) {
     const id = String(videoId || "").trim();
     if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return "";
+    const force = options && options.force ? "&force=1" : "";
     return (
       (window.API_BASE || "") +
       "/api/stream?id=" +
       encodeURIComponent(id) +
       "&quality=" +
-      encodeURIComponent(audioQuality())
+      encodeURIComponent(audioQuality()) +
+      force
     );
   }
 

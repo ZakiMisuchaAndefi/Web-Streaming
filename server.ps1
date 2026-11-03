@@ -1,5 +1,5 @@
 # ==========================================================================
-# server.ps1 - server statis kecil + resolver audio lokal (yt-dlp).
+# server.ps1 - server statis kecil + resolver audio lokal (InnerTube).
 # Jalankan dari PowerShell:  .\server.ps1
 # Lalu buka:                 http://127.0.0.1:4173/
 #
@@ -27,6 +27,7 @@ try {
   if ($nodeCommand) { $script:nodePath = [string]$nodeCommand.Source }
 } catch { }
 $script:audioCache = @{}
+$script:audioFileCache = [ordered]@{}
 $script:radioCache = @{}
 $script:searchCache = @{}
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
@@ -99,11 +100,11 @@ function Send-Json($stream, $status, $reason, $payload, $headOnly) {
   Send-Response $stream $status $reason "application/json; charset=utf-8" $bytes $headOnly
 }
 
-# Proxy audio dari googlevideo (bukan redirect) supaya sama dengan
-# api/stream.js di Vercel. Chromium memblokir redirect media lintas-origin
-# dengan net::ERR_BLOCKED_BY_ORB, jadi byte audio harus diteruskan server.
-function Send-AudioStream($stream, $url, $clientRange, $headOnly) {
-  $maxBytes = 2 * 1024 * 1024
+# Proxy byte-range audio dari Google Video ke browser (sama seperti api/stream.js).
+function Send-AudioStream($stream, $url, $clientRange, $headOnly, $userAgent) {
+  # Satu respons dibatasi 1 MB agar setiap permintaan tetap singkat, sama
+  # seperti api/stream.js di Vercel.
+  $maxBytes = 1 * 1024 * 1024
   $start = 0
   $end = $maxBytes - 1
   $suffixLength = 0
@@ -156,7 +157,11 @@ function Send-AudioStream($stream, $url, $clientRange, $headOnly) {
   for ($attempt = 0; $attempt -lt 6; $attempt++) {
     $request = [System.Net.HttpWebRequest]::Create($target)
     $request.Method = "GET"
-    $request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    $request.UserAgent = if ([string]::IsNullOrWhiteSpace($userAgent)) {
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    } else {
+      [string]$userAgent
+    }
     $request.Accept = "*/*"
     $request.AllowAutoRedirect = $false
     $request.Timeout = 30000
@@ -277,7 +282,7 @@ function Get-Mp3Quality($quality) {
 }
 
 # --------------------------------------------------------------------------
-# yt-dlp untuk audio; InnerTube untuk pencarian dan radio.
+# InnerTube untuk pencarian, audio, dan radio.
 # Semua proses Node dijalankan lewat scripts/innertube-cli.js.
 # --------------------------------------------------------------------------
 
@@ -352,23 +357,35 @@ function Invoke-InnerTubeSearch($query) {
 }
 
 function Invoke-INNER_TUBE($videoId, $quality) {
-  $result = Invoke-InnertubeCli @("audio", $videoId, $quality) 60000
+  $result = Invoke-InnertubeCli @("audio", $videoId, $quality) 20000
   if ($result.Status -ne 200) {
     return @{ Status = $result.Status; Error = $result.Error }
   }
 
-  $url = [string]$result.Output
-  if ($url -notmatch '^https?://') {
-    return @{ Status = 502; Error = "yt-dlp tidak mengembalikan URL audio" }
+  try {
+    $entry = $result.Output | ConvertFrom-Json
+  } catch {
+    return @{ Status = 502; Error = "Resolver audio mengembalikan data yang tidak valid" }
+  }
+
+  $url = [string]$entry.url
+  if ($url -notmatch '^https://') {
+    return @{ Status = 502; Error = "InnerTube tidak mengembalikan URL audio" }
+  }
+
+  $userAgent = ""
+  if ($entry.headers -and $entry.headers.PSObject.Properties["User-Agent"]) {
+    $userAgent = [string]$entry.headers."User-Agent"
   }
 
   $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-  $expires = $now + 3600
+  $expires = [int64]$entry.expires
+  if ($expires -le 0) { $expires = $now + 3600 }
   if ($url -match '[?&]expire=(\d+)') {
     $expires = [int64]$Matches[1]
   }
 
-  return @{ Status = 200; Url = $url; Expires = [int64]$expires }
+  return @{ Status = 200; Url = $url; UserAgent = $userAgent; Expires = $expires }
 }
 
 function Invoke-INNER_TUBERadio($videoId) {
@@ -562,7 +579,13 @@ function Start-DownloadJob($videoId, $quality, $title) {
   $outFile = Join-Path $script:downloadDir ($videoId + "-" + $quality + ".mp3")
   $mp3Quality = Get-Mp3Quality $quality
   $safeTitle = ([string]$title).Replace('"', "'").Replace("`r", " ").Replace("`n", " ")
+  $audioUserAgent = if ([string]::IsNullOrWhiteSpace([string]$resolved.UserAgent)) {
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  } else {
+    ([string]$resolved.UserAgent).Replace('"', "")
+  }
   $arguments = '-y -hide_banner -loglevel error -nostdin' +
+    ' -user_agent "' + $audioUserAgent + '"' +
     ' -i "' + $resolved.Url + '"' +
     ' -vn -map 0:a:0 -c:a libmp3lame -q:a ' + $mp3Quality +
     ' -id3v2_version 3 -metadata title="' + $safeTitle + '" -metadata comment="YouTube"' +
@@ -633,7 +656,7 @@ Write-Host ""
 Write-Host "  Musik - server lokal" -ForegroundColor Red
 Write-Host "  http://127.0.0.1:$Port/" -ForegroundColor White
 if (Test-InnerTubeResolver) {
-  Write-Host "  Audio resolver: yt-dlp (Node) siap" -ForegroundColor Green
+  Write-Host "  Audio resolver: InnerTube (Node) siap" -ForegroundColor Green
 } else {
   Write-Host "  Audio resolver: Node.js/scripts/innertube-cli.js tidak ditemukan (lagu YouTube nonaktif)" -ForegroundColor Yellow
 }
@@ -712,11 +735,12 @@ try {
         } else {
           $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           $cacheKey = $videoId + "|" + $quality
+          $force = (Get-QueryValue $rawQuery "force") -eq "1"
           $cached = $script:audioCache[$cacheKey]
-          if (-not ($cached -and [int64]$cached.Expires -gt ($now + 300))) {
+          if ($force -or -not ($cached -and [int64]$cached.Expires -gt ($now + 300))) {
             $resolved = Invoke-INNER_TUBE $videoId $quality
             if ($resolved.Status -eq 200) {
-              $cached = @{ Url = $resolved.Url; Expires = [int64]$resolved.Expires }
+              $cached = @{ Url = $resolved.Url; UserAgent = $resolved.UserAgent; Expires = [int64]$resolved.Expires }
               $script:audioCache[$cacheKey] = $cached
             } else {
               $status = if ($resolved.Status -eq 503) { 503 } else { 502 }
@@ -727,10 +751,25 @@ try {
           }
           if ($cached) {
             try {
-              Send-AudioStream $stream $cached.Url $clientRange $headOnly
+              Send-AudioStream $stream $cached.Url $clientRange $headOnly $cached.UserAgent
             } catch {
               Write-Host "[stream] gagal meneruskan audio: $($_.Exception.Message)" -ForegroundColor Yellow
-              Send-Json $stream 502 "Bad Gateway" @{ error = "Layanan audio tidak tersedia saat ini." } $headOnly
+              if (-not $headOnly) {
+                Send-Json $stream 502 "Bad Gateway" @{ error = "Layanan audio tidak tersedia saat ini." } $false
+              }
+            }
+          }
+        }
+      } elseif ($path -eq "/api/stream" -and ( $method -eq "GET" -or $headOnly) -and (Get-QueryValue $rawQuery "u")) {
+        $target = Get-QueryValue $rawQuery "u"
+        if ([string]::IsNullOrEmpty($target)) {
+          Send-Json $stream 400 "Bad Request" @{ error = "URL tidak valid" } $headOnly
+        } else {
+          try {
+            Send-AudioStream $stream $target $clientRange $headOnly
+          } catch {
+            if (-not $headOnly) {
+              Send-Json $stream 502 "Bad Gateway" @{ error = "Layanan audio tidak tersedia saat ini." } $false
             }
           }
         }
@@ -746,14 +785,15 @@ try {
         } else {
           $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           $cacheKey = $videoId + "|" + $quality
+          $proxyUrl = "/api/stream?id=" + [System.Uri]::EscapeDataString($videoId) + "&quality=" + [System.Uri]::EscapeDataString($quality)
           $cached = $script:audioCache[$cacheKey]
           if (-not $force -and $cached -and [int64]$cached.Expires -gt ($now + 300)) {
-            Send-Json $stream 200 "OK" @{ url = $cached.Url; expires = [int64]$cached.Expires; quality = $quality } $false
+            Send-Json $stream 200 "OK" @{ url = $proxyUrl; expires = [int64]$cached.Expires; quality = $quality } $false
           } else {
             $result = Invoke-INNER_TUBE $videoId $quality
             if ($result.Status -eq 200) {
-              $script:audioCache[$cacheKey] = @{ Url = $result.Url; Expires = [int64]$result.Expires }
-              Send-Json $stream 200 "OK" @{ url = $result.Url; expires = [int64]$result.Expires; quality = $quality } $false
+              $script:audioCache[$cacheKey] = @{ Url = $result.Url; UserAgent = $result.UserAgent; Expires = [int64]$result.Expires }
+              Send-Json $stream 200 "OK" @{ url = $proxyUrl; expires = [int64]$result.Expires; quality = $quality } $false
             } elseif ($result.Status -eq 503) {
               Send-Json $stream 503 "Service Unavailable" @{ error = $result.Error } $false
             } else {
