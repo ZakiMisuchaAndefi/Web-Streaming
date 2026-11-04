@@ -12,18 +12,31 @@
   const SEARCH_LIMIT = 40;
   const SEARCH_TIMEOUT = 18000;
 
-  // Mesin audio: "proxy" (resolver server, hanya untuk localhost) atau
-  // "iframe" (pemutar resmi YouTube di browser, dipakai di Vercel).
+  // Mesin audio:
+  //   "proxy"     — resolver di server lokal (server.ps1), tanpa iklan.
+  //   "invidious" — audio diambil dari instance Invidious publik; tanpa iklan
+  //                 dan tetap bisa memutar video yang melarang embed.
+  //   "iframe"    — pemutar resmi YouTube di browser (cadangan terakhir).
   const ENGINE_OVERRIDE = (() => {
     try {
       const value = new URLSearchParams(window.location.search).get("engine");
-      return value === "iframe" || value === "proxy" ? value : "";
+      return value === "iframe" || value === "proxy" || value === "invidious" ? value : "";
     } catch (error) {
       return "";
     }
   })();
 
+  // Urutan itag audio Invidious: m4a/AAC dulu (paling kompatibel), lalu webm.
+  const INVIDIOUS_ITAGS = {
+    high: [140, 251, 250, 249, 139],
+    low: [139, 249, 250, 140, 251]
+  };
+
   let streamEngine = ENGINE_OVERRIDE || "unknown";
+  // Di luar localhost, pakai instance Invidious sejak awal supaya lagu
+  // pertama tidak menunggu /api/health selesai.
+  const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname);
+  let invidiousHost = isLocalHost ? "" : "yt.chocolatemoo53.com";
 
   const session = [];
 
@@ -355,8 +368,14 @@
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (!data) return false;
-        if (!ENGINE_OVERRIDE && (data.engine === "iframe" || data.engine === "proxy")) {
+        if (
+          !ENGINE_OVERRIDE &&
+          (data.engine === "iframe" || data.engine === "proxy" || data.engine === "invidious")
+        ) {
           streamEngine = data.engine;
+        }
+        if (streamEngine === "invidious" && typeof data.instance === "string" && data.instance) {
+          invidiousHost = data.instance;
         }
         return !!(data.innertube || data.ytdlp || data.INNER_TUBE || data.innerTube || data.status === "ok");
       })
@@ -377,6 +396,9 @@
     const id = String(videoId || "").trim();
     if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return "";
     if (streamEngine === "iframe") return "yt:" + id;
+    if ((streamEngine === "invidious" || streamEngine === "unknown") && invidiousHost) {
+      return invidiousUrl(id, options);
+    }
     const force = options && options.force ? "&force=1" : "";
     return (
       (window.API_BASE || "") +
@@ -385,6 +407,22 @@
       "&quality=" +
       encodeURIComponent(audioQuality()) +
       force
+    );
+  }
+
+  // URL audio langsung dari instance Invidious. `attempt` dipakai untuk
+  // mencoba format lain ketika format sebelumnya gagal diputar.
+  function invidiousUrl(id, options) {
+    const list = INVIDIOUS_ITAGS[audioQuality()] || INVIDIOUS_ITAGS.high;
+    const attempt = Math.max(0, Math.min(list.length - 1, Number(options && options.attempt) || 0));
+    return (
+      "https://" +
+      invidiousHost +
+      "/latest_version?id=" +
+      encodeURIComponent(id) +
+      "&itag=" +
+      list[attempt] +
+      "&local=true"
     );
   }
 
@@ -398,6 +436,9 @@
     const id = String(videoId || "").trim();
     if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
     if (streamEngine === "iframe") return "yt:" + id;
+    if ((streamEngine === "invidious" || streamEngine === "unknown") && invidiousHost) {
+      return invidiousUrl(id, opts);
+    }
     const quality = audioQuality();
     const cacheKey = id + "|" + quality;
 
@@ -726,8 +767,9 @@
     search,
     sessionTracks,
     getStreamEngine: () => streamEngine,
+    getInvidiousHost: () => invidiousHost,
     setStreamEngine(mode) {
-      if (mode === "iframe" || mode === "proxy") streamEngine = mode;
+      if (mode === "iframe" || mode === "proxy" || mode === "invidious") streamEngine = mode;
       return streamEngine;
     }
   };

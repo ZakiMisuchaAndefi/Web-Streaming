@@ -1098,6 +1098,7 @@
       track.audioVideoId = sourceId;
       track.audioRetryCount = 0;
       track.audioRetrying = false;
+      track.iframeTried = false;
       audio.src = streamUrl;
       audio.load();
       state.loadedTrackId = trackId;
@@ -1375,16 +1376,20 @@
       return;
     }
 
-    // Di mesin IFrame, mengulang ID yang sama tidak berguna: error berarti
+    const engine =
+      AM.Youtube && typeof AM.Youtube.getStreamEngine === "function"
+        ? AM.Youtube.getStreamEngine()
+        : "";
+    // Pemutar YouTube (iframe) tidak perlu diulang: error di sana berarti
     // video itu memang tidak boleh diputar di luar YouTube.
-    const iframeEngine =
-      AM.Youtube &&
-      typeof AM.Youtube.getStreamEngine === "function" &&
-      AM.Youtube.getStreamEngine() === "iframe";
+    const iframeEngine = audio.mode === "youtube" || engine === "iframe";
+    // Invidious punya beberapa format audio; proxy/iframe cukup dua percobaan.
+    const invidiousEngine = engine === "invidious" || engine === "unknown";
+    const maxRetries = invidiousEngine ? 4 : 2;
 
     if (track.audioRetrying) return;
     const retryCount = Number(track.audioRetryCount) || 0;
-    if (retryCount < 2 && !iframeEngine && AM.Youtube) {
+    if (retryCount < maxRetries && !iframeEngine && AM.Youtube) {
       track.audioRetrying = true;
       track.audioRetryCount = retryCount + 1;
       const sourceId = track.audioVideoId || track.sourceId;
@@ -1397,7 +1402,10 @@
         return;
       }
       try {
-        streamUrl = AM.Youtube.audioStreamUrl(sourceId, { force: true });
+        streamUrl = AM.Youtube.audioStreamUrl(sourceId, {
+          force: true,
+          attempt: retryCount + 1
+        });
       } catch (error) {
         streamUrl = "";
       }
@@ -1419,6 +1427,23 @@
       }
       track.audioRetrying = false;
       handleAudioError();
+      return;
+    }
+
+    // Semua format Invidious gagal untuk lagu ini (mis. video dibatasi usia).
+    // Pakai pemutar resmi YouTube untuk lagu ini saja supaya tetap berbunyi.
+    if (invidiousEngine && !iframeEngine && !track.iframeTried) {
+      track.iframeTried = true;
+      track.audioRetryCount = 0;
+      track.audioRetrying = false;
+      const sourceId = track.audioVideoId || track.sourceId;
+      audio.src = "yt:" + sourceId;
+      try {
+        await audio.play();
+      } catch (error) {
+        if (state.loadToken !== token || state.currentId !== trackId) return;
+        reportPlayFailure(track, error);
+      }
       return;
     }
 
