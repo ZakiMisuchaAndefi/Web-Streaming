@@ -99,7 +99,10 @@
     lyricsSearchedTrackIds: new Set(),
     youtubeFailedIds: new Set(),
     youtubeSkipTimer: 0,
-    youtubeErrorToast: null
+    youtubeErrorToast: null,
+    nowPlayingOpen: false,
+    nowPlayingCloseTimer: 0,
+    lastTimeDetail: null
   };
 
   /* ------------------------------------------------------------------------
@@ -244,6 +247,28 @@
     els.lyricsClose = $("#lyricsClose");
     els.btnLyrics = $("#btnLyrics");
     els.topbarLyrics = $("#topbarLyrics");
+
+    els.nowPlaying = $("#nowPlaying");
+    els.npBackdrop = $("#npBackdrop");
+    els.npArt = $("#npArt");
+    els.npTitle = $("#npTitle");
+    els.npArtist = $("#npArtist");
+    els.npAlbum = $("#npAlbum");
+    els.npContext = $("#npContext");
+    els.npClose = $("#npClose");
+    els.npQueue = $("#npQueue");
+    els.npLike = $("#npLike");
+    els.npShuffle = $("#npShuffle");
+    els.npPrev = $("#npPrev");
+    els.npPlay = $("#npPlay");
+    els.npNext = $("#npNext");
+    els.npRepeat = $("#npRepeat");
+    els.npRepeatOne = $("#npRepeatOne");
+    els.npSeek = $("#npSeek");
+    els.npCurTime = $("#npCurTime");
+    els.npDurTime = $("#npDurTime");
+    els.npVolume = $("#npVolume");
+    els.npMute = $("#npMute");
 
     els.modalRoot = $("#modalRoot");
     els.menuRoot = $("#menuRoot");
@@ -778,11 +803,8 @@
     }
     if (els.playerArtButton) {
       els.playerArtButton.disabled = !hasTrack;
-      els.playerArtButton.title = track
-        ? online
-          ? "Buka di " + providerLabel
-          : "Buka album " + (track.album || track.title)
-        : "Buka album";
+      els.playerArtButton.title = "Buka pemutar";
+      els.playerArtButton.setAttribute("aria-label", "Buka pemutar lagu yang sedang diputar");
     }
 
     if (els.playerLike) {
@@ -844,6 +866,174 @@
 
     syncSettingsControls();
     updateDocumentTitle();
+    syncNowPlaying(s);
+  }
+
+  /* ------------------------------------------------------------------------
+     Tampilan pemutar penuh (Now Playing)
+     ------------------------------------------------------------------------ */
+
+  const NOW_PLAYING_CLOSE_MS = 340;
+
+  function setNowPlayingOpen(open) {
+    if (!els.nowPlaying) return;
+    const next = !!open;
+    if (next === !!state.nowPlayingOpen) return;
+    if (next && !P.state.currentId) return;
+
+    if (state.nowPlayingCloseTimer) {
+      window.clearTimeout(state.nowPlayingCloseTimer);
+      state.nowPlayingCloseTimer = 0;
+    }
+    state.nowPlayingOpen = next;
+
+    if (next) {
+      if (state.queueOpen) setQueueOpen(false);
+      if (state.lyricsOpen) setLyricsOpen(false);
+      syncNowPlaying(P.getState());
+      updateNowPlayingTime(state.lastTimeDetail);
+      els.nowPlaying.hidden = false;
+      els.nowPlaying.setAttribute("aria-hidden", "false");
+      document.body.classList.add("has-now-playing");
+      // Paksa reflow supaya transisi opacity/transform pasti berjalan,
+      // termasuk saat tab tidak sedang aktif (requestAnimationFrame bisa tertunda).
+      void els.nowPlaying.offsetWidth;
+      els.nowPlaying.classList.add("is-open");
+      if (els.npClose) els.npClose.focus({ preventScroll: true });
+      return;
+    }
+
+    els.nowPlaying.classList.remove("is-open");
+    if (els.playerArtButton && typeof els.playerArtButton.focus === "function") {
+      els.playerArtButton.focus({ preventScroll: true });
+    }
+    els.nowPlaying.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("has-now-playing");
+    state.nowPlayingCloseTimer = window.setTimeout(() => {
+      state.nowPlayingCloseTimer = 0;
+      if (!state.nowPlayingOpen && els.nowPlaying) els.nowPlaying.hidden = true;
+    }, NOW_PLAYING_CLOSE_MS);
+  }
+
+  function openNowPlaying() {
+    setNowPlayingOpen(true);
+  }
+
+  function closeNowPlaying() {
+    setNowPlayingOpen(false);
+  }
+
+  function syncNowPlaying(playerState) {
+    if (!els.nowPlaying) return;
+    const s = playerState || P.getState();
+    const track = s.track || null;
+    const hasTrack = !!track;
+    const online = !!(track && track.online);
+    const art = track ? L.trackArt(track) : "";
+
+    if (!hasTrack && state.nowPlayingOpen) setNowPlayingOpen(false);
+
+    if (els.npArt) {
+      if (els.npArt.getAttribute("src") !== art) els.npArt.src = art;
+      els.npArt.alt = track ? "Sampul " + (track.album || track.title) : "";
+    }
+    if (els.npBackdrop) {
+      if (els.npBackdrop.getAttribute("src") !== art) els.npBackdrop.src = art;
+      els.npBackdrop.alt = "";
+    }
+    if (els.npTitle) els.npTitle.textContent = track ? track.title : "Tidak ada yang diputar";
+    if (els.npArtist) {
+      els.npArtist.textContent = track ? track.artist : "Pilih lagu dari perpustakaanmu";
+    }
+    if (els.npAlbum) {
+      const album = track && track.album ? String(track.album) : "";
+      const provider = online ? track.providerLabel || O.providerLabel(track.provider) : "";
+      const parts = [];
+      if (album && track && album !== track.title) parts.push(album);
+      if (provider && !parts.includes(provider)) parts.push(provider);
+      els.npAlbum.textContent = parts.join(" · ");
+    }
+    if (els.npContext) {
+      const label = s.context && s.context.label ? String(s.context.label) : "";
+      els.npContext.textContent = label || (online ? "Dari internet" : "Sedang diputar");
+    }
+
+    const liked = !!track && !!track.liked;
+    if (els.npLike) {
+      els.npLike.disabled = !hasTrack;
+      els.npLike.classList.toggle("is-liked", liked);
+      els.npLike.setAttribute("aria-pressed", liked ? "true" : "false");
+      els.npLike.setAttribute("title", liked ? "Hapus dari suka" : "Sukai");
+      els.npLike.setAttribute("aria-label", liked ? "Hapus dari suka" : "Sukai lagu");
+      U.setIconIn(els.npLike, liked ? "heart-fill" : "heart");
+    }
+
+    if (els.npPrev) els.npPrev.disabled = !hasTrack;
+    if (els.npNext) els.npNext.disabled = !s.queueLength;
+    if (els.npPlay) {
+      els.npPlay.disabled = !hasTrack && !s.queueLength;
+      els.npPlay.dataset.state = s.isPlaying ? "playing" : "paused";
+      els.npPlay.setAttribute("aria-label", s.isPlaying ? "Jeda" : "Putar");
+      els.npPlay.setAttribute("title", s.isPlaying ? "Jeda" : "Putar");
+      U.setIconIn(els.npPlay, s.isPlaying ? "pause" : "play");
+    }
+    if (els.npShuffle) {
+      els.npShuffle.classList.toggle("is-active", !!s.shuffle);
+      els.npShuffle.setAttribute("aria-pressed", s.shuffle ? "true" : "false");
+    }
+    if (els.npRepeat) {
+      const labels = { off: "Ulangi: mati", all: "Ulangi: semua lagu", one: "Ulangi: satu lagu" };
+      els.npRepeat.classList.toggle("is-active", s.repeat !== "off");
+      els.npRepeat.setAttribute("aria-pressed", s.repeat !== "off" ? "true" : "false");
+      els.npRepeat.setAttribute("aria-label", labels[s.repeat] || labels.off);
+      els.npRepeat.setAttribute("title", labels[s.repeat] || labels.off);
+    }
+    if (els.npRepeatOne) els.npRepeatOne.hidden = s.repeat !== "one";
+    if (els.npQueue) els.npQueue.setAttribute("aria-pressed", state.queueOpen ? "true" : "false");
+
+    updateNowPlayingVolume({ volume: s.volume, muted: s.muted });
+  }
+
+  function updateNowPlayingTime(detail) {
+    if (!els.npSeek) return;
+    const duration = Math.max(0, Number(detail && detail.duration) || 0);
+    const current = Math.max(0, Number(detail && detail.currentTime) || 0);
+    const ratio = duration > 0 ? U.clamp(current / duration, 0, 1) : 0;
+    const buffer = U.clamp(Number(detail && detail.buffered) || 0, 0, 1);
+
+    els.npSeek.style.setProperty("--pct", (ratio * 100).toFixed(3) + "%");
+    els.npSeek.style.setProperty("--buffer", (buffer * 100).toFixed(3) + "%");
+    els.npSeek.setAttribute("aria-valuemin", "0");
+    els.npSeek.setAttribute("aria-valuemax", String(Math.round(duration)));
+    els.npSeek.setAttribute("aria-valuenow", String(Math.round(current)));
+    els.npSeek.setAttribute(
+      "aria-valuetext",
+      U.fmtTime(current) + " dari " + U.fmtTime(duration)
+    );
+    if (els.npCurTime) els.npCurTime.textContent = U.fmtTime(current);
+    if (els.npDurTime) els.npDurTime.textContent = U.fmtTime(duration);
+  }
+
+  function updateNowPlayingVolume(detail) {
+    if (!els.npVolume) return;
+    const volume = U.clamp(Number(detail && detail.volume) || 0, 0, 1);
+    const muted = !!(detail && detail.muted);
+
+    els.npVolume.style.setProperty("--pct", volume * 100 + "%");
+    els.npVolume.setAttribute("aria-valuenow", String(Math.round(volume * 100)));
+    els.npVolume.setAttribute(
+      "aria-valuetext",
+      muted ? "Bisu" : Math.round(volume * 100) + "%"
+    );
+    if (els.npMute) {
+      const name = muted || volume === 0 ? "volume-x" : volume < 0.5 ? "volume-1" : "volume-2";
+      U.setIconIn(els.npMute, name);
+      const label = muted ? "Bunyikan" : "Bisukan";
+      els.npMute.setAttribute("title", label);
+      els.npMute.setAttribute("aria-label", label);
+      els.npMute.setAttribute("aria-pressed", muted ? "true" : "false");
+      els.npMute.classList.toggle("is-active", muted);
+    }
   }
 
   function updateTime(detail) {
@@ -851,6 +1041,8 @@
     const current = Math.max(0, Number(detail && detail.currentTime) || 0);
     const ratio = duration > 0 ? U.clamp(current / duration, 0, 1) : 0;
     const buffer = U.clamp(Number(detail && detail.buffered) || 0, 0, 1);
+
+    state.lastTimeDetail = { currentTime: current, duration, buffered: buffer };
 
     if (els.seek) {
       els.seek.style.setProperty("--pct", (ratio * 100).toFixed(3) + "%");
@@ -862,6 +1054,7 @@
     }
     if (els.curTime) els.curTime.textContent = U.fmtTime(current);
     if (els.durTime) els.durTime.textContent = U.fmtTime(duration);
+    updateNowPlayingTime(detail);
   }
 
   function updateVolume(detail) {
@@ -879,6 +1072,7 @@
       els.btnMute.setAttribute("aria-label", muted ? "Bunyikan" : "Bisukan");
       els.btnMute.setAttribute("aria-pressed", muted ? "true" : "false");
     }
+    updateNowPlayingVolume(detail);
   }
 
   function syncTrackRows() {
@@ -1254,9 +1448,33 @@
     if (els.playerDownload) {
       els.playerDownload.addEventListener("click", () => downloadCurrentTrack());
     }
-    if (els.playerArtButton) els.playerArtButton.addEventListener("click", openCurrentAlbum);
+    if (els.playerArtButton) els.playerArtButton.addEventListener("click", openNowPlaying);
     if (els.playerTitle) els.playerTitle.addEventListener("click", openCurrentAlbum);
     if (els.playerArtist) els.playerArtist.addEventListener("click", openCurrentArtist);
+
+    if (els.npClose) els.npClose.addEventListener("click", closeNowPlaying);
+    if (els.npPlay) {
+      els.npPlay.addEventListener("click", () => {
+        state.blockedNotified = false;
+        P.toggle();
+      });
+    }
+    if (els.npPrev) els.npPrev.addEventListener("click", () => P.prev());
+    if (els.npNext) els.npNext.addEventListener("click", () => P.next(true));
+    if (els.npShuffle) els.npShuffle.addEventListener("click", () => P.toggleShuffle());
+    if (els.npRepeat) els.npRepeat.addEventListener("click", () => P.cycleRepeat());
+    if (els.npMute) els.npMute.addEventListener("click", () => P.toggleMute());
+    if (els.npLike) {
+      els.npLike.addEventListener("click", () => {
+        if (P.state.currentId) toggleLike(P.state.currentId);
+      });
+    }
+    if (els.npQueue) {
+      els.npQueue.addEventListener("click", () => {
+        closeNowPlaying();
+        setQueueOpen(true);
+      });
+    }
 
     if (els.btnQueue) els.btnQueue.addEventListener("click", toggleQueue);
     if (els.topbarQueue) els.topbarQueue.addEventListener("click", toggleQueue);
@@ -1312,7 +1530,11 @@
   }
 
   function bindSeek() {
-    const el = els.seek;
+    bindSeekElement(els.seek, els.curTime);
+    bindSeekElement(els.npSeek, els.npCurTime);
+  }
+
+  function bindSeekElement(el, timeEl) {
     if (!el) return;
     let dragging = false;
     let lastRatio = 0;
@@ -1327,8 +1549,8 @@
       const duration = Number(P.state.duration) || 0;
       if (!(duration > 0)) return;
       lastRatio = ratio;
-      els.seek.style.setProperty("--pct", (ratio * 100).toFixed(3) + "%");
-      if (els.curTime) els.curTime.textContent = U.fmtTime(ratio * duration);
+      el.style.setProperty("--pct", (ratio * 100).toFixed(3) + "%");
+      if (timeEl) timeEl.textContent = U.fmtTime(ratio * duration);
       el.setAttribute("aria-valuenow", String(Math.round(ratio * duration)));
       el.setAttribute("aria-valuetext", U.fmtTime(ratio * duration) + " dari " + U.fmtTime(duration));
     }
@@ -1386,7 +1608,11 @@
   }
 
   function bindVolume() {
-    const el = els.volume;
+    bindVolumeElement(els.volume);
+    bindVolumeElement(els.npVolume);
+  }
+
+  function bindVolumeElement(el) {
     if (!el) return;
     let dragging = false;
 
@@ -1803,6 +2029,11 @@
 
       if (event.key === "Escape") {
         if (UI.hasOpenModal() || UI.hasOpenMenu()) return;
+        if (state.nowPlayingOpen) {
+          event.preventDefault();
+          closeNowPlaying();
+          return;
+        }
         if (state.lyricsOpen) {
           event.preventDefault();
           setLyricsOpen(false);
@@ -1838,7 +2069,7 @@
       }
 
       if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-        if (target && (target.id === "seek" || target.id === "volume")) return;
+        if (target && (target.id === "seek" || target.id === "volume" || target.id === "npSeek" || target.id === "npVolume")) return;
         event.preventDefault();
         P.seekBy(event.key === "ArrowRight" ? 5 : -5);
         return;

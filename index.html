@@ -287,6 +287,90 @@
     </aside>
   </div>
 
+  <section class="now-playing" id="nowPlaying" role="dialog" aria-modal="true" aria-labelledby="npTitle" aria-hidden="true" hidden>
+    <div class="now-playing__backdrop" aria-hidden="true">
+      <img id="npBackdrop" alt="" draggable="false">
+    </div>
+    <div class="now-playing__scrim" aria-hidden="true"></div>
+
+    <div class="now-playing__panel">
+      <header class="now-playing__head">
+        <button class="icon-btn now-playing__head-btn" id="npClose" type="button" title="Tutup pemutar" aria-label="Tutup pemutar">
+          <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"></use></svg>
+        </button>
+        <p class="now-playing__eyebrow eyebrow" id="npContext">Sedang diputar</p>
+        <button class="icon-btn now-playing__head-btn queue-toggle" id="npQueue" type="button" title="Antrean" aria-label="Buka antrean" aria-pressed="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-list"></use></svg>
+          <span class="queue-toggle__dot" aria-hidden="true"></span>
+        </button>
+      </header>
+
+      <div class="now-playing__stage">
+        <figure class="now-playing__art">
+          <img id="npArt" alt="" draggable="false">
+        </figure>
+
+        <div class="now-playing__details">
+          <div class="now-playing__titles">
+            <h2 class="now-playing__title" id="npTitle">Tidak ada yang diputar</h2>
+            <p class="now-playing__artist" id="npArtist">Pilih lagu dari perpustakaanmu</p>
+            <p class="now-playing__album" id="npAlbum"></p>
+          </div>
+          <div class="now-playing__actions">
+            <button class="icon-btn now-playing__like" id="npLike" type="button" title="Sukai" aria-label="Sukai lagu" aria-pressed="false" disabled>
+              <svg class="icon" aria-hidden="true"><use href="#i-heart"></use></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="now-playing__timeline">
+        <div class="seek now-playing__seek" id="npSeek" role="slider" tabindex="0" aria-label="Posisi putar" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0:00 dari 0:00">
+          <div class="seek__rail">
+            <div class="seek__buffer" id="npSeekBuffer"></div>
+            <div class="seek__fill" id="npSeekFill"></div>
+            <div class="seek__thumb" id="npSeekThumb"></div>
+          </div>
+        </div>
+        <div class="now-playing__times">
+          <span class="time" id="npCurTime">0:00</span>
+          <span class="time" id="npDurTime">0:00</span>
+        </div>
+      </div>
+
+      <div class="now-playing__controls">
+        <button class="icon-btn now-playing__ctl" id="npShuffle" type="button" title="Acak" aria-label="Acak" aria-pressed="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-shuffle"></use></svg>
+        </button>
+        <button class="icon-btn now-playing__ctl now-playing__skip" id="npPrev" type="button" title="Sebelumnya" aria-label="Lagu sebelumnya" disabled>
+          <svg class="icon" aria-hidden="true"><use href="#i-skip-back"></use></svg>
+        </button>
+        <button class="now-playing__play" id="npPlay" type="button" title="Putar" aria-label="Putar" disabled>
+          <svg class="icon" aria-hidden="true"><use href="#i-play"></use></svg>
+        </button>
+        <button class="icon-btn now-playing__ctl now-playing__skip" id="npNext" type="button" title="Berikutnya" aria-label="Lagu berikutnya" disabled>
+          <svg class="icon" aria-hidden="true"><use href="#i-skip-forward"></use></svg>
+        </button>
+        <button class="icon-btn now-playing__ctl now-playing__repeat" id="npRepeat" type="button" title="Ulangi" aria-label="Ulangi" aria-pressed="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-repeat"></use></svg>
+          <span class="now-playing__repeat-one" id="npRepeatOne" hidden>1</span>
+        </button>
+      </div>
+
+      <div class="now-playing__volume">
+        <button class="icon-btn now-playing__mute" id="npMute" type="button" title="Bisukan" aria-label="Bisukan">
+          <svg class="icon" aria-hidden="true"><use href="#i-volume-2"></use></svg>
+        </button>
+        <div class="volume now-playing__volume-slider" id="npVolume" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="80" aria-valuetext="80%">
+          <div class="volume__rail">
+            <div class="volume__fill" id="npVolumeFill"></div>
+            <div class="volume__thumb" id="npVolumeThumb"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <div class="toast-region" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
   <div id="modalRoot"></div>
   <div id="menuRoot"></div>
