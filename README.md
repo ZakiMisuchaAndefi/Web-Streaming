@@ -54,7 +54,7 @@ Repo ini juga siap di-deploy ke **Vercel** tanpa build step:
 
 1. Impor repo di Vercel dan biarkan **Framework Preset** di **Other**.
 2. `api/*.js` otomatis menjadi serverless function (`vercel.json` sudah mengatur `maxDuration`).
-3. Pencarian, beranda, dan radio langsung berjalan lewat fungsi serverless. Pemutaran audio YouTube memakai **pemutar resmi YouTube (IFrame API)** di browser pengunjung, karena YouTube menolak permintaan video dari IP datacenter Vercel. Tidak perlu API key, binary, atau Python.
+3. Pencarian, beranda, dan radio langsung berjalan lewat fungsi serverless. Pemutaran audio YouTube memakai **instance Invidious** sebagai sumber audio: YouTube menolak permintaan audio dari IP datacenter Vercel, jadi `api/health` memeriksa instance yang tersedia dan browser memutar audionya langsung. Hasilnya tanpa iklan, durasi penuh, dan video yang melarang embed tetap bisa diputar. Jika instance sedang mati, aplikasi otomatis memakai pemutar resmi YouTube sebagai cadangan.
 
 > Di Vercel, `ffmpeg` tidak ikut terpasang sehingga tombol unduhan MP3 nonaktif. Untuk unduhan MP3, jalankan versi lokal dengan `ffmpeg.exe`.
 
@@ -66,7 +66,7 @@ Repo ini juga siap di-deploy ke **Vercel** tanpa build step:
 
 | Endpoint | Fungsi |
 | --- | --- |
-| `GET /api/health` | Status resolver `innertube`, `ffmpeg`, `mp3`, dan unduhan. |
+| `GET /api/health` | Status resolver `innertube`, `ffmpeg`, `mp3`, unduhan, serta `engine` audio (`proxy`, `invidious`, atau `iframe`). |
 | `GET /api/search?q=KATA` | Hasil pencarian YouTube lewat InnerTube (dipakai halaman Pencarian dan Beranda). |
 | `GET /api/resolve?id=VIDEO_ID&quality=high` | URL audio langsung dari YouTube (di-cache per video + kualitas); `force=1` mengambil URL baru untuk percobaan ulang. Dipakai saat aplikasi berjalan lokal. |
 | `GET /api/stream?id=VIDEO_ID&quality=high` | Menyajikan audio lewat byte-range agar player aplikasi bisa memutar dan seek; `force=1` mengambil URL baru saat mencoba ulang. Dipakai saat aplikasi berjalan lokal. |
@@ -75,7 +75,7 @@ Repo ini juga siap di-deploy ke **Vercel** tanpa build step:
 | `GET /api/download-status?job=JOB_ID` | Status job: `running`, `done`, atau `error`. |
 | `GET /api/download-file?job=JOB_ID` | Mengirim file hasil unduhan sebagai lampiran. |
 
-Saat di-deploy ke **Vercel**, endpoint yang sama dilayani fungsi Node di folder `api/` (tanpa server yang perlu menyala). Pencarian dan pemutaran audio memakai InnerTube di fungsi serverless.
+Saat di-deploy ke **Vercel**, endpoint yang sama dilayani fungsi Node di folder `api/` (tanpa server yang perlu menyala). Pencarian dan radio memakai InnerTube di fungsi serverless; audio YouTube diputar dari instance Invidious lewat browser.
 
 ## Beranda streaming
 
@@ -122,21 +122,21 @@ Tidak perlu API key, akun, atau impor file. Cukup buka **Pencarian** dan ketik k
 
 | Sumber | Yang tersedia | Catatan |
 | --- | --- | --- |
-| **YouTube** | Streaming audio dari video YouTube | Cari dengan kata kunci, atau tempel tautan video (watch, youtu.be, Shorts, atau YouTube Music). Di Vercel audio diputar lewat pemutar resmi YouTube yang berjalan tersembunyi; saat lokal, audio diproksikan oleh server. Tanpa tampilan video. |
+| **YouTube** | Streaming audio dari video YouTube | Cari dengan kata kunci, atau tempel tautan video (watch, youtu.be, Shorts, atau YouTube Music). Audio diputar sebagai audio murni — tanpa tampilan video dan tanpa iklan. Di Vercel sumbernya instance Invidious; saat lokal, audio diproksikan oleh server. |
 
 ### Cara memakai YouTube
 
 1. Jalankan aplikasi lewat `Jalankan.bat` atau `server.ps1` (butuh Node.js), atau langsung buka versi Vercel — tidak perlu memasang apa pun di komputer.
 2. Buka **Pencarian**, lalu ketik judul lagu atau nama artis — atau tempel tautan video langsung. Bagian **Dari YouTube** muncul otomatis di bawah hasil perpustakaan.
 3. Hasil pencarian bisa diputar lewat **Putar semua** atau **Acak**; satu video dari tautan langsung diputar sendiri.
-4. Kendalikan dari bar pemutar aplikasi seperti biasa — putar/jeda, geser posisi, volume, antrean, acak, dan ulangi tetap berfungsi. Lagu YouTube tampil seperti lagu lain: hanya audio, karena pemutar YouTube berjalan tersembunyi di latar belakang.
+4. Kendalikan dari bar pemutar aplikasi seperti biasa — putar/jeda, geser posisi, volume, antrean, acak, dan ulangi tetap berfungsi. Lagu YouTube tampil seperti lagu lain karena yang diputar hanya audionya.
 5. Saat sisa antrean tinggal ±5 lagu (dan ulangi = mati), aplikasi otomatis mengambil rekomendasi baru berdasarkan lagu yang sedang diputar lalu mengisi antrean sampai ±20 lagu. Sumbernya playlist Mix/Radio YouTube (`list=RD…`) yang diambil lewat API InnerTube, bukan pencarian judul — jadi lagu berikutnya berbeda judul tetapi mirip vibe, genre, era, dan bahasanya. Lagu yang ditambahkan manual tetap di atas rekomendasi otomatis.
 
 Catatan:
 
 - Pencarian memakai **InnerTube**, API internal YouTube yang juga dipakai situs YouTube, lewat `/api/search` (hasil disimpan sementara 5 menit). Tidak perlu API key resmi. Jika pencarian gagal, coba lagi beberapa saat atau tempel tautan video langsung.
-- Video yang tidak mengizinkan pemutaran di luar YouTube akan dilewati otomatis: aplikasi mencoba hasil alternatif untuk lagu yang sama lebih dulu, lalu memberi tahu bila semuanya gagal.
-- Di Vercel, YouTube memblokir pengambilan audio dari IP datacenter. Karena itu pemutaran memakai pemutar resmi YouTube di browser (IFrame API), bukan resolver server. Di localhost resolver server tetap dipakai sehingga tidak ada iklan.
+- Video yang tidak mengizinkan pemutaran di luar YouTube tetap bisa diputar, karena audio diambil langsung (bukan lewat pemutar embed). Jika satu format gagal, aplikasi mencoba format lain, lalu pemutar resmi YouTube untuk lagu itu, lalu hasil alternatif untuk lagu yang sama.
+- Di Vercel, YouTube memblokir pengambilan audio dari IP datacenter. Karena itu aplikasi memakai **instance Invidious** sebagai sumber audio: server hanya memeriksa instance mana yang hidup lewat `/api/health`, lalu browser memutar audionya langsung. Di localhost resolver server tetap dipakai. Keduanya bebas iklan.
 - Radio otomatis butuh `InnerTube resolver` dan koneksi internet; hasilnya disimpan sementara agar tidak berulang kali mengambil daftar yang sama. Kandidat disaring: judul sama/mirip dengan lagu acuan dibuang, duplikat unggahan dirapikan, durasi wajib 1–10 menit, maksimal 2 lagu per artis dalam 10 lagu, dan artis yang sama tidak muncul dua kali berturut-turut. Cover, karaoke, dan remix dilewati kecuali lagu acuannya memang cover/remix.
 - Tautan playlist bisa ditempel, tetapi hanya video utamanya yang diputar.
 
@@ -169,10 +169,11 @@ Umum:
 
 ### Kenapa bukan YouTube Data API atau Spotify?
 
-Pemutaran YouTube memakai dua mesin, dipilih otomatis lewat `/api/health`:
+Pemutaran YouTube memakai mesin yang dipilih otomatis lewat `/api/health`:
 
-- **Lokal** — klien InnerTube di `server.ps1` mengambil audio, lalu dikirim per byte-range ke elemen `<audio>` aplikasi.
-- **Vercel** — pemutar resmi YouTube (IFrame API) berjalan tersembunyi di browser dan mengirim audio langsung ke perangkat pengunjung, karena YouTube menolak permintaan video dari IP datacenter.
+- **Lokal (`proxy`)** — klien InnerTube di `server.ps1` mengambil audio, lalu dikirim per byte-range ke elemen `<audio>` aplikasi.
+- **Vercel (`invidious`)** — browser memutar audio dari instance Invidious terdekat yang hidup. YouTube menolak permintaan audio dari IP datacenter, jadi sumbernya bukan server Vercel. Tanpa iklan dan tanpa batas embed.
+- **Cadangan (`iframe`)** — pemutar resmi YouTube di browser, dipakai hanya bila instance tidak tersedia atau satu lagu gagal di semua format.
 
 Pencarian dan radio selalu memakai **InnerTube**, bukan YouTube Data API.
 
@@ -208,7 +209,7 @@ Pemutaran Spotify penuh juga memerlukan akun **Spotify Premium**, OAuth, dan Spo
 - Data disimpan di **IndexedDB** milik browser, bukan di server.
 - Kapasitas bergantung pada kuota browser (biasanya beberapa GB). Pengaturan menampilkan perkiraan pemakaian.
 - Semua file lokal tetap di perangkat ini dan tidak pernah diunggah ke internet.
-- Saat memakai pencarian YouTube, kata kunci pencarian atau tautan yang kamu tempel dan metadata video dikirim ke YouTube (via InnerTube dan oEmbed). Di Vercel, audio diputar oleh pemutar resmi YouTube di browser sehingga YouTube juga menerima koneksi langsung dari perangkatmu. Tidak ada data perpustakaan lokal yang ikut dikirim.
+- Saat memakai pencarian YouTube, kata kunci pencarian atau tautan yang kamu tempel dan metadata video dikirim ke YouTube (via InnerTube dan oEmbed). Di Vercel, audio diputar dari instance Invidious sehingga instance itu dan YouTube menerima koneksi langsung dari perangkatmu. Tidak ada data perpustakaan lokal yang ikut dikirim.
 - **Daftar Suka dari YouTube** disimpan di `localStorage` browser. **File hasil unduhan** disimpan sebagai file biasa di folder `downloads/` dan tidak diunggah ke mana pun.
 - **Pengaturan → Hapus semua data** menghapus lagu, sampul, playlist, dan favorit lokal dari aplikasi. File asli di folder musikmu dan file di folder `downloads/` tidak terhapus.
 - Menghapus data situs di browser juga akan menghapus koleksi Musik, antrean, pengaturan, dan daftar Suka dari YouTube.
@@ -246,7 +247,7 @@ Pintasan selain `Esc` tidak aktif saat kamu sedang mengetik di kolom input.
 │   ├── resolve.js      # GET /api/resolve
 │   ├── stream.js       # GET /api/stream
 │   ├── radio.js        # GET /api/radio
-│   └── health.js       # GET /api/health
+│   └── health.js       # GET /api/health (pilih mesin audio)
 ├── css/
 │   ├── base.css        # variabel warna, tipografi, tombol, form
 │   ├── layout.css      # kerangka aplikasi, topbar, area konten
@@ -264,7 +265,7 @@ Pintasan selain `Esc` tidak aktif saat kamu sedang mengetik di kolom input.
     ├── metadata.js     # pembaca tag audio dan lirik tertanam
     ├── demo.js         # generator perpustakaan demo
     ├── online.js       # sumber musik online (YouTube), cache & daftar Suka
-    ├── youtube.js      # pencarian InnerTube + URL audio (proxy/IFrame)
+    ├── youtube.js      # pencarian InnerTube + URL audio (proxy/Invidious/IFrame)
     ├── downloads.js    # unduhan MP3 YouTube lewat job server
     ├── home.js         # feed streaming untuk beranda
     ├── library.js      # state perpustakaan, impor, playlist, riwayat

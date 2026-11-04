@@ -36,7 +36,8 @@
   // Di luar localhost, pakai instance Invidious sejak awal supaya lagu
   // pertama tidak menunggu /api/health selesai.
   const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname);
-  let invidiousHost = isLocalHost ? "" : "yt.chocolatemoo53.com";
+  let invidiousHost =
+    isLocalHost && ENGINE_OVERRIDE !== "invidious" ? "" : "yt.chocolatemoo53.com";
 
   const session = [];
 
