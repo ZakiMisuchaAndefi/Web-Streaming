@@ -1591,6 +1591,15 @@
       });
     }
 
+    // Saat tab kembali terlihat, gulir halus bisa tertinggal; luruskan posisi
+    // baris aktif tanpa animasi agar tidak tampil di luar layar.
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible" || !state.lyricsOpen || !els.lyricsBody) return;
+      const lines = $$(".lyrics-line", els.lyricsBody);
+      const line = lines[state.lyricsActiveIndex];
+      if (line) scrollLyricsTo(line, true);
+    });
+
     if (els.btnQueue) els.btnQueue.addEventListener("click", toggleQueue);
     if (els.topbarQueue) els.topbarQueue.addEventListener("click", toggleQueue);
     $$(".lyrics-toggle").forEach((button) => {
