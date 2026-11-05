@@ -19,7 +19,7 @@ Tema gelap dan terang dengan aksen merah khas Apple Music, lengkap dengan sampul
 - **Unduhan MP3** — simpan lagu YouTube sebagai `.mp3` dengan metadata judul, artis, album, dan sampul tertanam. Membutuhkan `ffmpeg.exe`.
 - **Impor ke playlist** — impor file langsung dari halaman playlist; lagu baru masuk ke perpustakaan dan playlist sekaligus, sedangkan lagu yang sudah ada tetap ditambahkan ke playlist tanpa menduplikasi perpustakaan.
 - **Timer tidur** — hentikan pemutaran setelah 5, 10, 15, 30, 45, atau 60 menit, atau di akhir lagu; volume menurun perlahan sebelum jeda.
-- **Lirik tertanam** — lirik dari tag audio (ID3 `USLT`/`SYLT`, Vorbis `LYRICS`, MP4 `©lyr`) tampil di panel samping. Lirik LRC disinkronkan, disorot, dan digulir otomatis; teks biasa tampil sebagai fallback.
+- **Lirik tertanam** — lirik dari tag audio (ID3 `USLT`/`SYLT`, Vorbis `LYRICS`, MP4 `©lyr`) tampil di layar lirik penuh bergaya Apple Music. Lirik LRC disinkronkan, baris aktif membesar dan terang, baris lain memudar; panel menggulir halus mengikuti lagu. Teks biasa tampil sebagai fallback.
 - **Romanisasi lirik** — baris non-Latin (Han, Hangul, kana, Arab, Kiril, Thai) otomatis diberi transliterasi di bawah baris aslinya. Diproses lokal, tanpa API berbayar.
 - **Beranda streaming** — menu utama langsung menampilkan rekomendasi lagu, stasiun radio, dan lagu populer yang bisa diputar sekali klik, tanpa perlu impor.
 - **Media Session** — kontrol pemutaran muncul di pusat media sistem saat browser mendukung.
@@ -198,9 +198,10 @@ Pemutaran Spotify penuh juga memerlukan akun **Spotify Premium**, OAuth, dan Spo
 ## Lirik & romanisasi
 
 - Lirik dibaca dari tag audio: ID3 `USLT`/`SYLT`/`TXXX`, Vorbis `LYRICS`/`UNSYNCEDLYRICS`, dan MP4 `©lyr`.
-- Buka panel lirik lewat tombol lirik di bar pemutar atau bilah atas.
-- Lirik berformat **LRC** (`[mm:ss.xx]`) disinkronkan dengan pemutaran: baris aktif disorot dan panel menggulir otomatis. Ketuk baris untuk melompat ke waktunya.
-- Lirik tanpa timestamp tampil sebagai teks biasa. Jika lagu tidak punya lirik, panel menampilkan **“Lirik tidak tersedia”** tanpa error.
+- Buka layar lirik lewat tombol lirik di bar pemutar, bilah atas, atau tampilan pemutar penuh. Latarnya memakai sampul lagu yang diburamkan.
+- Lirik berformat **LRC** (`[mm:ss.xx]`) disinkronkan dengan pemutaran: baris aktif membesar dan terang, baris di sekitarnya memudar dan sedikit kabur. Panel menggulir halus dan menahan baris aktif di sekitar 42% tinggi layar. Ketuk baris untuk melompat ke waktunya.
+- Menggulir sendiri akan menghentikan gulir otomatis sementara; setelah ±4 detik panel kembali mengikuti baris aktif.
+- Lirik tanpa timestamp tampil sebagai teks biasa. Jika lagu tidak punya lirik, layar menampilkan **“Lirik tidak tersedia”** tanpa error.
 - Baris dengan aksara non-Latin otomatis mendapat **transliterasi** di bawahnya: Han (pinyin), Hangul, kana/kanji Jepang, Arab/Persia, Kiril, dan Thai. Baris Latin tidak diberi transliterasi.
 - Semua romanisasi diproses **lokal di browser** — tidak ada panggilan API atau layanan berbayar.
 
@@ -227,7 +228,7 @@ Pemutaran Spotify penuh juga memerlukan akun **Spotify Premium**, OAuth, dan Spo
 | `Q` | Buka / tutup antrean |
 | `/` atau `Shift` + `/` | Buka pencarian |
 | `Ctrl` + `K` / `⌘` + `K` | Buka pencarian |
-| `Esc` | Tutup modal, menu, antrean, panel lirik, atau sidebar |
+| `Esc` | Tutup modal, menu, antrean, layar lirik, atau sidebar |
 
 Pintasan selain `Esc` tidak aktif saat kamu sedang mengetik di kolom input.
 
@@ -253,7 +254,7 @@ Pintasan selain `Esc` tidak aktif saat kamu sedang mengetik di kolom input.
 │   ├── layout.css      # kerangka aplikasi, topbar, area konten
 │   ├── sidebar.css     # sidebar dan laci navigasi
 │   ├── content.css     # hero, kartu, daftar lagu, pencarian
-│   ├── player.css      # pemutar bawah, antrean, timer tidur, panel lirik
+│   ├── player.css      # pemutar bawah, antrean, timer tidur, layar lirik
 │   ├── overlays.css    # modal, menu konteks, toast, pengaturan
 │   └── responsive.css  # tablet, ponsel, dan perangkat sentuh
 └── js/

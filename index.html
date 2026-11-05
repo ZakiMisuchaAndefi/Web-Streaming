@@ -269,22 +269,31 @@
       </footer>
     </aside>
 
-    <aside class="queue-panel lyrics-panel" id="lyricsPanel" aria-label="Lirik lagu" aria-hidden="true">
-      <header class="queue-panel__head">
-        <div>
-          <p class="eyebrow">Lirik</p>
-          <h2 id="lyricsTitle">Lirik</h2>
-        </div>
-        <button class="icon-btn" id="lyricsClose" type="button" title="Tutup lirik" aria-label="Tutup lirik">
-          <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
-        </button>
-      </header>
-      <div class="queue-panel__body lyrics-panel__body" id="lyricsBody"></div>
-      <footer class="queue-panel__foot lyrics-panel__foot">
-        <span id="lyricsMeta">Lirik tertanam dari file</span>
-        <span id="lyricsHint">Ketuk baris untuk melompat</span>
-      </footer>
-    </aside>
+    <section class="lyrics-panel" id="lyricsPanel" role="dialog" aria-modal="true" aria-labelledby="lyricsTitle" aria-hidden="true" hidden>
+      <div class="lyrics-panel__backdrop" aria-hidden="true">
+        <img id="lyricsBackdrop" alt="" draggable="false">
+      </div>
+      <div class="lyrics-panel__scrim" aria-hidden="true"></div>
+
+      <div class="lyrics-panel__inner">
+        <header class="lyrics-panel__head">
+          <button class="icon-btn lyrics-panel__close" id="lyricsClose" type="button" title="Tutup lirik" aria-label="Tutup lirik">
+            <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"></use></svg>
+          </button>
+          <div class="lyrics-panel__meta">
+            <p class="lyrics-panel__eyebrow" id="lyricsMeta">Lirik</p>
+            <h2 class="lyrics-panel__title" id="lyricsTitle">Lirik</h2>
+            <p class="lyrics-panel__artist" id="lyricsArtist"></p>
+          </div>
+        </header>
+
+        <div class="lyrics-panel__body" id="lyricsBody" tabindex="0"></div>
+
+        <footer class="lyrics-panel__foot">
+          <span id="lyricsHint">Ketuk baris untuk melompat</span>
+        </footer>
+      </div>
+    </section>
   </div>
 
   <section class="now-playing" id="nowPlaying" role="dialog" aria-modal="true" aria-labelledby="npTitle" aria-hidden="true" hidden>
@@ -299,10 +308,15 @@
           <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"></use></svg>
         </button>
         <p class="now-playing__eyebrow eyebrow" id="npContext">Sedang diputar</p>
-        <button class="icon-btn now-playing__head-btn queue-toggle" id="npQueue" type="button" title="Antrean" aria-label="Buka antrean" aria-pressed="false">
-          <svg class="icon" aria-hidden="true"><use href="#i-list"></use></svg>
-          <span class="queue-toggle__dot" aria-hidden="true"></span>
-        </button>
+        <div class="now-playing__head-actions">
+          <button class="icon-btn now-playing__head-btn lyrics-toggle" id="npLyrics" type="button" title="Lirik" aria-label="Buka lirik" aria-pressed="false">
+            <svg class="icon" aria-hidden="true"><use href="#i-lyrics"></use></svg>
+          </button>
+          <button class="icon-btn now-playing__head-btn queue-toggle" id="npQueue" type="button" title="Antrean" aria-label="Buka antrean" aria-pressed="false">
+            <svg class="icon" aria-hidden="true"><use href="#i-list"></use></svg>
+            <span class="queue-toggle__dot" aria-hidden="true"></span>
+          </button>
+        </div>
       </header>
 
       <div class="now-playing__stage">

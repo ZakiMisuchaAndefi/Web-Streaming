@@ -398,45 +398,252 @@
 }
 
 /* --------------------------------------------------------------------------
-   Panel lirik
+   Lirik layar penuh (gaya Apple Music)
+   Baris aktif besar dan terang, baris lain memudar dan sedikit kabur,
+   bergulir halus mengikuti lagu. Latar memakai sampul yang diburamkan.
    -------------------------------------------------------------------------- */
 
 .lyrics-panel {
-  z-index: 91;
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  background: #08080a;
+  color: #fff;
+  /* Token tema lokal: lirik selalu gelap agar teks putih lebih menonjol. */
+  --text: #fff;
+  --text-2: rgba(255, 255, 255, 0.74);
+  --text-3: rgba(255, 255, 255, 0.5);
+  --bg-active: rgba(255, 255, 255, 0.2);
+  --bg-hover: rgba(255, 255, 255, 0.12);
+  --accent-soft: rgba(255, 255, 255, 0.24);
+  --accent-text: #fff;
+  opacity: 0;
+  visibility: hidden;
+  /* visibility ditunda saat menutup, tetapi langsung aktif saat membuka
+     agar tombol tutup bisa langsung difokuskan. */
+  transition: opacity 380ms var(--ease), visibility 0s linear 380ms;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
+.lyrics-panel[hidden] {
+  display: none;
+}
+
+.lyrics-panel.is-open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 380ms var(--ease), visibility 0s;
+}
+
+body.has-lyrics {
+  overflow: hidden;
+}
+
+.lyrics-panel__backdrop {
+  position: absolute;
+  inset: -14%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.lyrics-panel__backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(78px) saturate(180%) brightness(0.5);
+  transform: scale(1.16);
+  opacity: 0.85;
+  animation: lyrics-breathe 30s ease-in-out infinite alternate;
+}
+
+@keyframes lyrics-breathe {
+  from {
+    transform: scale(1.14);
+  }
+
+  to {
+    transform: scale(1.24);
+  }
+}
+
+.lyrics-panel__scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(110% 70% at 50% 0%, rgba(255, 255, 255, 0.08), transparent 62%),
+    linear-gradient(180deg, rgba(8, 8, 10, 0.62), rgba(8, 8, 10, 0.84) 52%, rgba(4, 4, 6, 0.96));
+}
+
+.lyrics-panel__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(980px, 100%);
+  height: 100%;
+  padding: clamp(14px, 2.4vh, 26px) clamp(20px, 4vw, 56px) clamp(12px, 2vh, 22px);
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity 320ms var(--ease), transform 520ms var(--ease-out);
+}
+
+.lyrics-panel.is-open .lyrics-panel__inner {
+  opacity: 1;
+  transform: none;
+}
+
+/* Kepala ------------------------------------------------------------------ */
+
+.lyrics-panel__head {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(12px, 2vw, 18px);
+  flex: none;
+  padding-bottom: clamp(8px, 1.8vh, 18px);
+}
+
+.lyrics-panel__close {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+.lyrics-panel__close:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.lyrics-panel__meta {
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.lyrics-panel__eyebrow {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.48);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-panel__title {
+  margin-top: 5px;
+  font-family: var(--font-display);
+  font-size: clamp(17px, 2.1vw, 23px);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-panel__artist {
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Isi -------------------------------------------------------------------- */
+
 .lyrics-panel__body {
-  padding: 16px 22px 28px;
-  scroll-behavior: smooth;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 42vh clamp(2px, 2vw, 26px) 62vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  outline: none;
+  /* Baris memudar halus di tepi atas dan bawah. */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 11%, #000 74%, transparent 97%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 11%, #000 74%, transparent 97%);
+}
+
+.lyrics-panel__body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.lyrics-panel__body.is-static {
+  padding-top: clamp(24px, 9vh, 96px);
+  padding-bottom: 32vh;
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .lyrics-synced {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: clamp(10px, 1.5vh, 16px);
 }
 
 .lyrics-line {
+  --dist: 6;
   display: block;
   width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  color: var(--text-2);
-  font-size: 14.5px;
-  line-height: 1.45;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: clamp(24px, 3.6vw, 42px);
+  font-weight: 700;
+  line-height: 1.16;
+  letter-spacing: -0.03em;
   text-align: left;
-  transition: background 160ms var(--ease), color 160ms var(--ease), font-weight 160ms var(--ease);
+  text-wrap: balance;
+  cursor: pointer;
+  opacity: calc(1 - min(var(--dist), 6) * 0.135);
+  filter: blur(calc(min(var(--dist), 5) * 0.9px));
+  transform: scale(calc(1 - min(var(--dist), 7) * 0.02));
+  transform-origin: left center;
+  transition:
+    opacity 560ms var(--ease),
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 560ms var(--ease),
+    color 560ms var(--ease);
 }
 
-.lyrics-line:hover {
-  background: var(--bg-hover);
-  color: var(--text);
+.lyrics-line:hover,
+.lyrics-line:focus-visible {
+  opacity: 0.85;
+  filter: none;
+  transform: scale(1.005);
+}
+
+.lyrics-line:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.55);
+  outline-offset: 6px;
+  border-radius: 10px;
 }
 
 .lyrics-line.is-active {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-weight: 600;
+  opacity: 1;
+  filter: none;
+  transform: none;
+  color: #fff;
+  text-shadow:
+    0 0 34px rgba(255, 255, 255, 0.26),
+    0 0 90px rgba(255, 255, 255, 0.1);
 }
 
 .lyrics-line__text {
@@ -445,52 +652,112 @@
 
 .lyrics-line__translit {
   display: block;
-  margin-top: 2px;
-  color: var(--text-3);
-  font-size: 11.5px;
-  font-weight: 400;
-  line-height: 1.45;
+  margin-top: 0.32em;
+  font-family: var(--font-body, inherit);
+  font-size: 0.46em;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .lyrics-line.is-active .lyrics-line__translit {
-  color: var(--accent-text);
-  opacity: 0.72;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .lyrics-plain p {
-  margin: 0 0 6px;
-  color: var(--text-2);
-  font-size: 14px;
-  line-height: 1.65;
+  margin: 0 0 clamp(14px, 2.2vh, 22px);
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.6vw, 30px);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .lyrics-empty {
-  padding: 48px 10px;
-  color: var(--text-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46vh;
+  padding: 32px 14px;
+  color: rgba(255, 255, 255, 0.55);
   text-align: center;
 }
 
 .lyrics-empty .icon {
-  width: 34px;
-  height: 34px;
-  margin-bottom: 12px;
-  color: var(--text-3);
+  width: 38px;
+  height: 38px;
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .lyrics-empty p {
-  margin: 4px 0;
-  font-size: 13px;
-  line-height: 1.55;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
 }
 
 .lyrics-empty strong {
-  color: var(--text-2);
-  font-size: 14px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.lyrics-panel__foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding-top: 10px;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.42);
 }
 
 @media (max-width: 760px) {
+  .lyrics-panel__inner {
+    padding: 12px 18px 10px;
+  }
+
   .lyrics-panel__body {
-    padding: 12px 14px 20px;
+    padding-top: 40vh;
+    padding-bottom: 60vh;
+  }
+
+  .lyrics-line {
+    font-size: clamp(22px, 6.4vw, 30px);
+  }
+
+  .lyrics-synced {
+    gap: 12px;
+  }
+}
+
+@media (max-height: 660px) {
+  .lyrics-panel__head {
+    padding-bottom: 4px;
+  }
+
+  .lyrics-panel__body {
+    padding-top: 36vh;
+    padding-bottom: 56vh;
+  }
+
+  .lyrics-line {
+    font-size: clamp(20px, 3.2vw, 34px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-panel,
+  .lyrics-panel__inner,
+  .lyrics-line,
+  .lyrics-panel__backdrop img {
+    transition: none;
+    animation: none;
   }
 }
 
@@ -841,6 +1108,19 @@ body.has-now-playing {
 .now-playing__head-btn:hover {
   background: rgba(255, 255, 255, 0.18);
   color: #fff;
+}
+
+.lyrics-toggle[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.26);
+  color: #fff;
+}
+
+.now-playing__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: end;
 }
 
 .now-playing__eyebrow {

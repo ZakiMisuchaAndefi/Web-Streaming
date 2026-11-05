@@ -97,6 +97,9 @@
     lyricsLoadingTrackId: "",
     lyricsFailedTrackId: "",
     lyricsSearchedTrackIds: new Set(),
+    lyricsUserScrollUntil: 0,
+    lyricsScrollTimer: 0,
+    lyricsCloseTimer: 0,
     youtubeFailedIds: new Set(),
     youtubeSkipTimer: 0,
     youtubeErrorToast: null,
@@ -243,10 +246,13 @@
     els.lyricsBody = $("#lyricsBody");
     els.lyricsTitle = $("#lyricsTitle");
     els.lyricsMeta = $("#lyricsMeta");
+    els.lyricsArtist = $("#lyricsArtist");
     els.lyricsHint = $("#lyricsHint");
     els.lyricsClose = $("#lyricsClose");
+    els.lyricsBackdrop = $("#lyricsBackdrop");
     els.btnLyrics = $("#btnLyrics");
     els.topbarLyrics = $("#topbarLyrics");
+    els.npLyrics = $("#npLyrics");
 
     els.nowPlaying = $("#nowPlaying");
     els.npBackdrop = $("#npBackdrop");
@@ -1206,9 +1212,19 @@
     const synced = parsed.synced.length > 0;
     const hasLyrics = synced || parsed.plain.length > 0;
     state.lyricsActiveIndex = -1;
+    els.lyricsBody.classList.toggle("is-static", !synced);
 
     if (els.lyricsTitle) {
       els.lyricsTitle.textContent = track ? track.title : "Lirik";
+    }
+    if (els.lyricsArtist) {
+      els.lyricsArtist.textContent = track ? track.artist || "" : "";
+      els.lyricsArtist.hidden = !track || !track.artist;
+    }
+    if (els.lyricsBackdrop) {
+      const art = track ? L.trackArt(track) : "";
+      if (els.lyricsBackdrop.getAttribute("src") !== art) els.lyricsBackdrop.src = art;
+      els.lyricsBackdrop.alt = "";
     }
     if (els.lyricsMeta) {
       if (!track) {
@@ -1312,40 +1328,123 @@
       else break;
     }
     if (!force && active === state.lyricsActiveIndex) return;
+    const previous = state.lyricsActiveIndex;
     state.lyricsActiveIndex = active;
-    lines.forEach((line, index) => line.classList.toggle("is-active", index === active));
+    lines.forEach((line, index) => {
+      const isActive = index === active;
+      line.classList.toggle("is-active", isActive);
+      if (isActive) line.setAttribute("aria-current", "true");
+      else line.removeAttribute("aria-current");
+      line.style.setProperty("--dist", String(active < 0 ? 6 : Math.abs(index - active)));
+    });
     const line = lines[active];
-    if (!line) return;
-
-    const rect = line.getBoundingClientRect();
-    const box = els.lyricsBody.getBoundingClientRect();
-    const delta = rect.top - box.top;
-    if (delta < 0 || delta > box.height * 0.62) {
-      const top = els.lyricsBody.scrollTop + delta - box.height / 2 + rect.height / 2;
-      if (typeof els.lyricsBody.scrollTo === "function") {
-        els.lyricsBody.scrollTo({ top: Math.max(0, top), behavior: force ? "auto" : "smooth" });
-      } else {
-        els.lyricsBody.scrollTop = Math.max(0, top);
+    if (!line) {
+      // Sebelum baris pertama (atau saat lagu diulang), kembali ke awal lirik.
+      if ((previous >= 0 || force) && els.lyricsBody.scrollTop > 0) {
+        els.lyricsBody.scrollTo({ top: 0, behavior: force ? "auto" : "smooth" });
       }
+      return;
     }
+    // Saat pengguna menggeser sendiri, jangan tarik paksa ke baris aktif.
+    if (!force && Date.now() < state.lyricsUserScrollUntil) return;
+    scrollLyricsTo(line, !!force);
+  }
+
+  // Baris aktif ditahan di sekitar 42% tinggi area lirik, seperti Apple Music.
+  const LYRICS_ANCHOR = 0.42;
+  const LYRICS_USER_PAUSE_MS = 4200;
+
+  function scrollLyricsTo(line, instant) {
+    if (!els.lyricsBody || !line) return;
+    const body = els.lyricsBody;
+    const box = body.getBoundingClientRect();
+    const rect = line.getBoundingClientRect();
+    const target =
+      body.scrollTop + (rect.top - box.top) - box.height * LYRICS_ANCHOR + rect.height / 2;
+    const max = Math.max(0, body.scrollHeight - box.height);
+    const top = U.clamp(target, 0, max);
+    if (Math.abs(top - body.scrollTop) < 1.5) return;
+    if (typeof body.scrollTo === "function") {
+      body.scrollTo({ top, behavior: instant ? "auto" : "smooth" });
+    } else {
+      body.scrollTop = top;
+    }
+  }
+
+  function markLyricsUserScroll() {
+    if (!state.lyricsOpen) return;
+    state.lyricsUserScrollUntil = Date.now() + LYRICS_USER_PAUSE_MS;
+    if (state.lyricsScrollTimer) window.clearTimeout(state.lyricsScrollTimer);
+    state.lyricsScrollTimer = window.setTimeout(() => {
+      state.lyricsScrollTimer = 0;
+      if (!state.lyricsOpen) return;
+      const lines = $$(".lyrics-line", els.lyricsBody);
+      scrollLyricsTo(lines[state.lyricsActiveIndex], false);
+    }, LYRICS_USER_PAUSE_MS + 60);
   }
 
   function setLyricsOpen(open) {
     const next = !!open;
+    if (next === state.lyricsOpen) return;
+    if (next && state.nowPlayingOpen) closeNowPlaying();
     if (next && state.queueOpen) setQueueOpen(false);
     state.lyricsOpen = next;
+
+    if (state.lyricsCloseTimer) {
+      window.clearTimeout(state.lyricsCloseTimer);
+      state.lyricsCloseTimer = 0;
+    }
+    if (state.lyricsScrollTimer) {
+      window.clearTimeout(state.lyricsScrollTimer);
+      state.lyricsScrollTimer = 0;
+    }
+    state.lyricsUserScrollUntil = 0;
+
     if (!next) {
       state.lyricsRequestToken += 1;
       state.lyricsLoadingTrackId = "";
     }
     if (els.lyricsPanel) {
-      els.lyricsPanel.classList.toggle("is-open", next);
       els.lyricsPanel.setAttribute("aria-hidden", next ? "false" : "true");
+      if (next) {
+        els.lyricsPanel.hidden = false;
+        // Paksa reflow agar transisi opacity pasti berjalan meski tab tidak aktif.
+        void els.lyricsPanel.offsetWidth;
+        els.lyricsPanel.classList.add("is-open");
+      } else {
+        els.lyricsPanel.classList.remove("is-open");
+        state.lyricsCloseTimer = window.setTimeout(() => {
+          state.lyricsCloseTimer = 0;
+          if (!state.lyricsOpen && els.lyricsPanel) els.lyricsPanel.hidden = true;
+        }, 380);
+      }
     }
     $$(".lyrics-toggle").forEach((button) => {
       button.setAttribute("aria-pressed", next ? "true" : "false");
     });
-    if (next) renderLyricsPanel();
+    document.body.classList.toggle("has-lyrics", next);
+
+    if (next) {
+      renderLyricsPanel();
+      if (els.lyricsClose && typeof els.lyricsClose.focus === "function") {
+        els.lyricsClose.focus({ preventScroll: true });
+      }
+    } else {
+      if (els.lyricsBody) {
+        const body = els.lyricsBody;
+        window.setTimeout(() => {
+          if (!state.lyricsOpen) body.scrollTop = 0;
+        }, 400);
+      }
+      if (
+        els.btnLyrics &&
+        els.lyricsPanel &&
+        document.activeElement &&
+        els.lyricsPanel.contains(document.activeElement)
+      ) {
+        els.btnLyrics.focus({ preventScroll: true });
+      }
+    }
   }
 
   function toggleLyrics() {
@@ -1469,6 +1568,12 @@
         if (P.state.currentId) toggleLike(P.state.currentId);
       });
     }
+    if (els.npLyrics) {
+      els.npLyrics.addEventListener("click", () => {
+        closeNowPlaying();
+        setLyricsOpen(true);
+      });
+    }
     if (els.npQueue) {
       els.npQueue.addEventListener("click", () => {
         closeNowPlaying();
@@ -1476,9 +1581,22 @@
       });
     }
 
+    if (els.lyricsBody) {
+      els.lyricsBody.addEventListener("wheel", markLyricsUserScroll, { passive: true });
+      els.lyricsBody.addEventListener("touchmove", markLyricsUserScroll, { passive: true });
+      els.lyricsBody.addEventListener("keydown", (event) => {
+        if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
+          markLyricsUserScroll();
+        }
+      });
+    }
+
     if (els.btnQueue) els.btnQueue.addEventListener("click", toggleQueue);
     if (els.topbarQueue) els.topbarQueue.addEventListener("click", toggleQueue);
-    $$(".lyrics-toggle").forEach((button) => button.addEventListener("click", toggleLyrics));
+    $$(".lyrics-toggle").forEach((button) => {
+      if (button === els.npLyrics) return;
+      button.addEventListener("click", toggleLyrics);
+    });
     if (els.lyricsClose) els.lyricsClose.addEventListener("click", () => setLyricsOpen(false));
     if (els.queueClose) els.queueClose.addEventListener("click", () => setQueueOpen(false));
     if (els.queueClear) {
