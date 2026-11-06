@@ -35,6 +35,15 @@
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
   backdrop-filter: blur(var(--glass-blur)) saturate(150%);
   box-shadow: var(--shadow-glass);
+  /* Lapisan sendiri: mencegah artefak putih ketika isi pill
+     memakai transform di atas backdrop-filter. */
+  transform: translateZ(0);
+}
+
+/* Di atas kaca, hover jangan mengecat lingkaran putih — cukup
+   ikon yang berubah warna. */
+.player .icon-btn:hover {
+  background: transparent;
 }
 
 /* --------------------------------------------------------------------------
@@ -250,13 +259,16 @@
 }
 
 .player__play:hover:not(:disabled) {
-  transform: scale(1.07);
+  /* Tanpa scale — transform di atas backdrop-filter memicu artefak
+     putih pada sebagian GPU; umpan baliknya diganti halo pink. */
+  transform: none;
   background: var(--pink);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 4px var(--pink-soft), var(--shadow-glass);
 }
 
 .player__play:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: none;
+  box-shadow: 0 0 0 2px var(--pink-soft), var(--shadow-glass);
 }
 
 .player__play:disabled {
