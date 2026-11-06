@@ -117,6 +117,8 @@ html {
   --border-glass-strong: rgba(255, 255, 255, 0.14);
   --glass-blur: 16px;
   --shadow-glass: 0 6px 16px rgba(0, 0, 0, 0.16);
+  /* Hover di balik kaca: gelap transparan agar tidak tampak blok keras. */
+  --surface-hover: rgba(0, 0, 0, 0.3);
 
   --radius-control: 6px;
   --radius-tile: 10px;
@@ -203,6 +205,7 @@ html {
   --border-glass: rgba(0, 0, 0, 0.07);
   --border-glass-strong: rgba(0, 0, 0, 0.11);
   --shadow-glass: 0 6px 16px rgba(0, 0, 0, 0.08);
+  --surface-hover: rgba(0, 0, 0, 0.08);
 }
 
 html,
