@@ -2,6 +2,15 @@
    base.css — reset, design tokens, tipografi, dan komponen dasar
    ========================================================================== */
 
+/* Inter (variable) — lisensi SIL OFL, lihat assets/fonts/LICENSE-Inter.txt. */
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 *,
 *::before,
 *::after {
@@ -82,6 +91,52 @@ html {
   --hero-fade: #1f1f1f;
   --glass: rgba(255, 255, 255, 0.06);
   --glass-border: rgba(255, 255, 255, 0.1);
+
+  /* ------------------------------------------------------------------------
+     Token desain "Vinyl" — dipakai bertahap per bagian.
+     Belum mengubah token lama agar bagian lain tidak ikut berubah.
+     ------------------------------------------------------------------------ */
+
+  --font-inter: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --ink: #f6eef1;
+  --ink-2: rgba(246, 238, 241, 0.62);
+  --ink-3: rgba(246, 238, 241, 0.38);
+  --pink: #f29bbb;
+  --pink-soft: rgba(242, 155, 187, 0.18);
+  --pink-tint: rgba(242, 160, 190, 0.12);
+  --icy: #a9d3f0;
+  --icy-tint: rgba(169, 211, 240, 0.06);
+  --surface: #000000;
+  --surface-deep: #120d11;
+
+  --glass-1: rgba(255, 255, 255, 0.08);
+  --glass-2: rgba(255, 255, 255, 0.12);
+  --border-glass: rgba(255, 255, 255, 0.11);
+  --border-glass-strong: rgba(255, 255, 255, 0.14);
+  --glass-blur: 16px;
+  --shadow-glass: 0 6px 16px rgba(0, 0, 0, 0.16);
+
+  --radius-control: 6px;
+  --radius-tile: 10px;
+  --radius-bar: 12px;
+  --radius-panel: 14px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --text-micro: 10px;
+  --text-sm: 11px;
+  --text-md: 12px;
+  --text-base: 13px;
+  --text-brand: 22px;
+  --leading: 1.4;
 }
 
 [data-theme="light"] {
@@ -131,6 +186,23 @@ html {
   --glass: rgba(255, 255, 255, 0.16);
   --glass-border: rgba(255, 255, 255, 0.28);
   --toast-text: #ffffff;
+
+  /* Token "Vinyl" untuk tema terang (kontras disesuaikan). */
+  --ink: #1d1d1f;
+  --ink-2: rgba(29, 29, 31, 0.64);
+  --ink-3: rgba(29, 29, 31, 0.4);
+  --pink: #c92a68;
+  --pink-soft: rgba(242, 155, 187, 0.32);
+  --pink-tint: rgba(242, 160, 190, 0.24);
+  --icy: #2f6f9e;
+  --icy-tint: rgba(169, 211, 240, 0.3);
+  --surface: #f4f4f7;
+  --surface-deep: #ffffff;
+  --glass-1: rgba(255, 255, 255, 0.62);
+  --glass-2: rgba(255, 255, 255, 0.8);
+  --border-glass: rgba(0, 0, 0, 0.07);
+  --border-glass-strong: rgba(0, 0, 0, 0.11);
+  --shadow-glass: 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 
 html,
