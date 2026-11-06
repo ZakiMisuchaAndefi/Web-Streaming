@@ -33,7 +33,7 @@
   }
 
   .player {
-    grid-template-columns: minmax(190px, 1fr) minmax(320px, 1.5fr) minmax(150px, 0.8fr);
+    grid-template-columns: minmax(215px, 1fr) minmax(300px, 1.5fr) minmax(170px, 0.8fr);
     gap: 12px;
     padding: 0 18px;
   }
