@@ -29,6 +29,7 @@
   background:
     radial-gradient(130% 90% at 4% 0%, var(--icy-tint), transparent 52%),
     radial-gradient(70% 90% at 100% 100%, var(--pink-tint), transparent 60%),
+    linear-gradient(var(--pill-scrim), var(--pill-scrim)),
     var(--glass-2);
   border: 0;
   border-radius: var(--radius-bar);
@@ -489,7 +490,7 @@
     border-radius: 0;
     box-shadow: none;
     transform: none;
-    background: var(--glass-2);
+    background: linear-gradient(var(--pill-scrim), var(--pill-scrim)), var(--glass-2);
     padding: 0 var(--space-4);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
     backdrop-filter: blur(var(--glass-blur)) saturate(150%);
