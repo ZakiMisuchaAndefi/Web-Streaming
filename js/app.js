@@ -407,7 +407,7 @@
     window.clearTimeout(state.searchOnlineTimer);
 
     const result = AM.Views.render(els.view, route);
-    state.viewTitle = result && result.title ? result.title : "Musik";
+    state.viewTitle = result && result.title ? result.title : "Vinyl";
     if (els.topbarTitle) els.topbarTitle.textContent = state.viewTitle;
 
     if (route.name === "home" && AM.Home) {
@@ -554,8 +554,8 @@
 
   function updateDocumentTitle() {
     const track = P.currentTrack();
-    if (track) document.title = track.title + " — " + track.artist + " · Musik";
-    else document.title = state.viewTitle + " · Musik";
+    if (track) document.title = track.title + " — " + track.artist + " · Vinyl";
+    else document.title = state.viewTitle + " · Vinyl";
   }
 
   /* ------------------------------------------------------------------------
