@@ -33,15 +33,11 @@
     var(--glass-2);
   border: 0;
   border-radius: var(--radius-bar);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  /* Tanpa ring/cincin putih apa pun: inset shadow di atas lapisan
-     backdrop-filter digambar dobel di sebagian GPU dan tampak sebagai
-     garis putih di tepi atas. Separasi cukup dari shadow gelap. */
+  /* Tanpa backdrop-filter: di sebagian GPU (terutama laptop Intel),
+     blur di layer ini di-raster ulang setengah resolusi saat area lain
+     di-hover → seluruh pill tampak berkabut sesaat. Kesan kaca tetap
+     dibawa oleh scrim + lapisan putih + tint di bawah. */
   box-shadow: var(--shadow-glass);
-  /* Lapisan sendiri: mencegah artefak putih ketika isi pill
-     memakai transform di atas backdrop-filter. */
-  transform: translateZ(0);
 }
 
 /* Di atas kaca, hover jangan mengecat lingkaran putih — cukup
@@ -492,8 +488,6 @@
     transform: none;
     background: linear-gradient(var(--pill-scrim), var(--pill-scrim)), var(--glass-2);
     padding: 0 var(--space-4);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-    backdrop-filter: blur(var(--glass-blur)) saturate(150%);
   }
 
   .player__timeline {
