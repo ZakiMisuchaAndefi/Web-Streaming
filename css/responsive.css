@@ -3,10 +3,8 @@
    ========================================================================== */
 
 @media (max-width: 1280px) {
-  :root {
-    --sidebar-width: 252px;
-  }
-
+  /* Lebar sidebar dipertahankan: kalau dipersempit, label seperti
+     "Dengarkan Sekarang" terlipat dua baris dan menu terasa mepet. */
   .grid {
     grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
     gap: 22px 16px;
