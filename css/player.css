@@ -303,12 +303,13 @@
 }
 
 /* Timeline — garis tipis di kaki pill, dengan label waktu di kiri & kanan
-   bar (bukan menumpuk di bawah nama artis seperti sebelumnya). */
+   bar. Bar sengaja dibuat lebih pendek (10% dari tiap ujung) agar angka
+   durasi tidak menempel di ujung pill. */
 
 .player__timeline {
   position: absolute;
-  left: var(--space-5);
-  right: var(--space-5);
+  left: 10%;
+  right: 10%;
   bottom: 2px;
   display: flex;
   align-items: center;

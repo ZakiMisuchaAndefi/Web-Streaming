@@ -120,9 +120,10 @@ html {
   --border-glass-strong: rgba(255, 255, 255, 0.14);
   --glass-blur: 16px;
   --shadow-glass: 0 6px 16px rgba(0, 0, 0, 0.16);
-  /* Tirai gelap di bawah kaca pill: meredam konten terang di belakangnya
-     agar kecerahan pill seragam (diserap saat diputar di atas sampul/kartu terang). */
-  --pill-scrim: rgba(21, 21, 24, 0.72);
+  /* Tirai gelap di bawah kaca pill: meredam konten terang di belakangnya.
+     Tanpa backdrop-filter, tirai harus cukup pekat agar sampul di belakang
+     tidak ikut terbaca menembus pill. */
+  --pill-scrim: rgba(21, 21, 24, 0.95);
   /* Hover di balik kaca: gelap transparan agar tidak tampak blok keras. */
   --surface-hover: rgba(0, 0, 0, 0.3);
 
