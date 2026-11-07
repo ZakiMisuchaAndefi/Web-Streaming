@@ -23,8 +23,7 @@
   grid-template-columns: minmax(250px, 1fr) minmax(310px, 1.35fr) minmax(205px, 1fr);
   align-items: center;
   gap: var(--space-4);
-  /* Ruang ekstra di kaki pill untuk bar progres + label waktu. */
-  padding: 0 var(--space-5) 10px;
+  padding: 0 var(--space-5);
   font-family: var(--font-inter);
   color: var(--ink);
   background:
@@ -189,7 +188,11 @@
    Tengah — kontrol & progres
    -------------------------------------------------------------------------- */
 
+/* Kolom tengah mengisi penuh tinggi pill supaya bar progres bisa diletakkan
+   tepat di bawah kontrol transport, bukan melebar ke seluruh pill. */
 .player__center {
+  position: relative;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -197,6 +200,7 @@
   width: 100%;
   max-width: 680px;
   justify-self: center;
+  min-width: 0;
 }
 
 .player__controls {
@@ -302,14 +306,14 @@
   color: var(--pink);
 }
 
-/* Timeline — garis tipis di kaki pill, dengan label waktu di kiri & kanan
-   bar. Bar sengaja dibuat lebih pendek (10% dari tiap ujung) agar angka
-   durasi tidak menempel di ujung pill. */
+/* Timeline — garis tipis di bawah kontrol transport, selebar kolom tengah.
+   Ruang label waktu selalu disisakan (walau tersembunyi) supaya bar tidak
+   berubah panjang saat label muncul. */
 
 .player__timeline {
   position: absolute;
-  left: 10%;
-  right: 10%;
+  left: 0;
+  right: 0;
   bottom: 2px;
   display: flex;
   align-items: center;
@@ -323,15 +327,27 @@
   height: 12px;
 }
 
+/* Label waktu tersembunyi secara default; muncul hanya saat kursor
+   mengarah ke bar progres (atau saat bar difokus lewat keyboard).
+   Lebarnya tetap dipesan agar bar tidak melompat. */
 .time {
   width: 34px;
   flex: none;
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: var(--text-micro);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   text-align: center;
   user-select: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 140ms var(--ease), visibility 140ms var(--ease);
+}
+
+.player__timeline:hover .time,
+.player__timeline:focus-within .time {
+  opacity: 1;
+  visibility: visible;
 }
 
 .seek {
