@@ -25,7 +25,7 @@
         <div class="sidebar__brand">
           <a class="brand" href="#/home" aria-label="Musik — Dengarkan Sekarang">
             <span class="brand__mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v11.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="currentColor"/><circle cx="16.5" cy="15.5" r="2.5" fill="currentColor"/></svg>
+              <img src="assets/logo-vinyl.png" alt="" width="44" height="44" decoding="async">
             </span>
             <span class="brand__text">Musik</span>
           </a>
@@ -119,14 +119,12 @@
 
         <div class="sidebar__footer">
           <button class="import-card" id="sidebarImport" type="button">
-            <span class="import-card__icon">
-              <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
-            </span>
-            <span class="import-card__text">
+            <span class="import-card__head">
+              <svg class="icon import-card__upload" aria-hidden="true"><use href="#i-upload"></use></svg>
               <strong>Impor musik</strong>
-              <small>MP3, M4A, FLAC, WAV</small>
             </span>
-            <svg class="icon import-card__chev" aria-hidden="true"><use href="#i-chevron-right"></use></svg>
+            <span class="import-card__sub">Musikmu, di satu tempat.</span>
+            <span class="import-card__formats">MP3, M4A, FLAC, WAV</span>
           </button>
           <div class="sidebar__footer-row">
             <button class="icon-btn" id="themeToggle" type="button" title="Ganti tema" aria-label="Ganti tema">

@@ -18,8 +18,8 @@
     var(--glass-2);
   border: 1px solid var(--border-glass-strong);
   padding: var(--space-5) var(--space-5) var(--space-4);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--shadow-glass);
   overflow: hidden;
 }
@@ -29,7 +29,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: 0 0 var(--space-5);
+  /* Figma: logo berakhir di y=64, kolom pencarian mulai di y=80. */
+  padding: 0 0 var(--space-4);
 }
 
 .brand {
@@ -46,7 +47,7 @@
   width: 44px;
   height: 44px;
   border-radius: var(--radius-tile);
-  background: var(--pink-tint);
+  background: var(--pink-tile);
   border: 1px solid var(--border-glass);
   color: var(--pink);
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -54,17 +55,19 @@
   flex: none;
 }
 
-.brand__mark svg {
-  width: 22px;
-  height: 22px;
+.brand__mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .brand__text {
   font-family: var(--font-inter);
   font-size: var(--text-brand);
-  line-height: 1;
+  line-height: 1.2;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   color: var(--ink);
 }
 
@@ -91,6 +94,7 @@
   font-family: var(--font-inter);
   font-size: var(--text-md);
   font-weight: 400;
+  box-shadow: var(--shadow-glass);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   transition: background var(--speed) var(--ease), color var(--speed) var(--ease),
@@ -134,7 +138,7 @@
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 0 0 var(--space-4);
+  padding: 0 0 var(--space-2);
 }
 
 .nav-list {
@@ -172,17 +176,18 @@
 .nav-item .icon {
   width: 20px;
   height: 20px;
-  color: var(--ink-3);
+  color: var(--ink-2);
   transition: color var(--speed) var(--ease);
 }
 
+/* Figma: hover hanya menggelapkan latar; label & ikon tetap 62%. */
 .nav-item:hover {
   background: var(--surface-hover);
-  color: var(--ink);
+  color: var(--ink-2);
 }
 
 .nav-item:hover .icon {
-  color: var(--ink);
+  color: var(--ink-2);
 }
 
 .nav-item.is-active {
@@ -225,14 +230,21 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  height: 32px;
-  padding: 0 var(--space-3);
-  margin-bottom: var(--space-2);
+  /* Figma: header Perpustakaan 36px, rata tepi konten (tanpa indentasi). */
+  height: 36px;
+  padding: 0;
+  margin-bottom: var(--space-1);
   color: var(--ink-2);
   font-size: var(--text-micro);
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   text-transform: uppercase;
+}
+
+/* Header Playlist di Figma 32px. */
+.nav-section--playlists .nav-section__head {
+  height: 32px;
+  margin-bottom: var(--space-2);
 }
 
 .nav-section__head .icon-btn {
@@ -243,6 +255,16 @@
 
 .nav-section__head .icon-btn:hover {
   color: var(--ink);
+}
+
+/* Baris Perpustakaan: 40px dengan ikon 19px (Figma). */
+.nav-section:not(.nav-section--playlists) .nav-item {
+  min-height: 40px;
+}
+
+.nav-section:not(.nav-section--playlists) .nav-item .icon {
+  width: 19px;
+  height: 19px;
 }
 
 .nav-list--playlists .nav-item {
@@ -269,11 +291,16 @@
   white-space: nowrap;
 }
 
+/* Petunjuk playlist kosong: satu baris ringkas agar tidak mendorong
+   header Playlist keluar dari panel saat tinggi layar standar. */
 .nav-empty {
-  padding: 4px var(--space-3) var(--space-2);
+  padding: 4px 14px 2px;
   color: var(--ink-3);
-  font-size: var(--text-md);
-  line-height: 1.5;
+  font-size: var(--text-sm);
+  line-height: var(--leading);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-empty button {
@@ -298,13 +325,16 @@
 
 .import-card {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  align-items: flex-start;
   width: 100%;
-  padding: var(--space-3) var(--space-4);
+  /* Figma: kartu impor 220×108, teks menumpuk dari atas. */
+  min-height: 108px;
+  padding: var(--space-6) var(--space-4);
   border-radius: var(--radius-tile);
   background: var(--glass-1);
   border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
   text-align: left;
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
@@ -321,44 +351,40 @@
   transform: scale(0.99);
 }
 
-.import-card__icon {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: var(--pink-soft);
-  color: var(--pink);
+.import-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.import-card__upload {
+  width: 17px;
+  height: 17px;
+  color: var(--ink-2);
+  opacity: 0.75;
   flex: none;
 }
 
-.import-card__icon .icon {
-  width: 16px;
-  height: 16px;
-}
-
-.import-card__text {
-  display: grid;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-
-.import-card__text strong {
+.import-card__head strong {
   font-size: var(--text-base);
   font-weight: 600;
-  color: var(--ink);
+  color: var(--ink-2);
+  line-height: var(--leading);
 }
 
-.import-card__text small {
+.import-card__sub {
+  margin-top: 3px;
   font-size: var(--text-sm);
   color: var(--ink-2);
+  line-height: var(--leading);
 }
 
-.import-card__chev {
-  width: 14px;
-  height: 14px;
-  color: var(--ink-3);
+.import-card__formats {
+  margin-top: 1px;
+  font-size: var(--text-micro);
+  font-weight: 500;
+  color: var(--ink-2);
+  line-height: var(--leading);
 }
 
 .sidebar__footer-row {
@@ -396,6 +422,10 @@
 
 @media (min-width: 901px) {
   .sidebar {
+    /* Figma: panel sidebar setinggi layar (852 pada frame 900), memanjang
+       melewati area konten sampai berdampingan dengan pill player. */
+    align-self: start;
+    height: calc(100dvh - var(--space-3) - var(--space-3));
     margin: var(--space-3);
     border-radius: var(--radius-panel);
   }

@@ -76,7 +76,8 @@ html {
   --radius-xl: 22px;
   --radius-pill: 999px;
 
-  --sidebar-width: 272px;
+  /* Lebar kolom = panel 260 + margin 12 kiri/kanan (Figma: sidebar 260). */
+  --sidebar-width: 284px;
   --player-height: 92px;
   --topbar-height: 64px;
   --content-max: 1560px;
@@ -106,6 +107,8 @@ html {
   --pink: #f29bbb;
   --pink-soft: rgba(242, 155, 187, 0.18);
   --pink-tint: rgba(242, 160, 190, 0.12);
+  /* Ubin logo di Figma: pink 12% (242, 155, 187), bukan pink ambient. */
+  --pink-tile: rgba(242, 155, 187, 0.12);
   --icy: #a9d3f0;
   --icy-tint: rgba(169, 211, 240, 0.06);
   --surface: #000000;
@@ -199,6 +202,7 @@ html {
   --pink: #c92a68;
   --pink-soft: rgba(242, 155, 187, 0.32);
   --pink-tint: rgba(242, 160, 190, 0.24);
+  --pink-tile: rgba(242, 155, 187, 0.24);
   --icy: #2f6f9e;
   --icy-tint: rgba(169, 211, 240, 0.3);
   --surface: #f4f4f7;
