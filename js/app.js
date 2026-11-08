@@ -99,7 +99,6 @@
     lyricsSearchedTrackIds: new Set(),
     lyricsUserScrollUntil: 0,
     lyricsScrollTimer: 0,
-    lyricsCloseTimer: 0,
     youtubeFailedIds: new Set(),
     youtubeSkipTimer: 0,
     youtubeErrorToast: null,
@@ -210,6 +209,7 @@
     els.view = $("#view");
     els.audio = $("#audio");
 
+    els.player = $("#player");
     els.playerArt = $("#playerArt");
     els.playerArtButton = $("#playerArtButton");
     els.playerTitle = $("#playerTitle");
@@ -248,12 +248,8 @@
     els.lyricsMeta = $("#lyricsMeta");
     els.lyricsArtist = $("#lyricsArtist");
     els.lyricsHint = $("#lyricsHint");
-    els.lyricsClose = $("#lyricsClose");
-    els.lyricsBackdrop = $("#lyricsBackdrop");
     els.btnLyrics = $("#btnLyrics");
     els.topbarLyrics = $("#topbarLyrics");
-    els.npLyrics = $("#npLyrics");
-
     els.nowPlaying = $("#nowPlaying");
     els.npBackdrop = $("#npBackdrop");
     els.npArt = $("#npArt");
@@ -262,7 +258,7 @@
     els.npAlbum = $("#npAlbum");
     els.npContext = $("#npContext");
     els.npClose = $("#npClose");
-    els.npQueue = $("#npQueue");
+    els.npExpand = $("#npExpand");
     els.npLike = $("#npLike");
     els.npShuffle = $("#npShuffle");
     els.npPrev = $("#npPrev");
@@ -787,11 +783,7 @@
     if (els.playerTitle) {
       els.playerTitle.textContent = track ? track.title : "Tidak ada yang diputar";
       els.playerTitle.disabled = !hasTrack;
-      els.playerTitle.title = track
-        ? online
-          ? "Buka di " + providerLabel
-          : "Buka album " + (track.album || track.title)
-        : "Buka album";
+      els.playerTitle.title = track ? "Buka pemutar" : "Buka album";
     }
     if (els.playerArtist) {
       els.playerArtist.textContent = track ? track.artist : "Pilih lagu dari perpustakaanmu";
@@ -887,6 +879,8 @@
     if (next === !!state.nowPlayingOpen) return;
     if (next && !P.state.currentId) return;
 
+    if (!next && state.lyricsOpen) setLyricsOpen(false);
+
     if (state.nowPlayingCloseTimer) {
       window.clearTimeout(state.nowPlayingCloseTimer);
       state.nowPlayingCloseTimer = 0;
@@ -895,7 +889,6 @@
 
     if (next) {
       if (state.queueOpen) setQueueOpen(false);
-      if (state.lyricsOpen) setLyricsOpen(false);
       syncNowPlaying(P.getState());
       updateNowPlayingTime(state.lastTimeDetail);
       els.nowPlaying.hidden = false;
@@ -949,19 +942,22 @@
     }
     if (els.npTitle) els.npTitle.textContent = track ? track.title : "Tidak ada yang diputar";
     if (els.npArtist) {
-      els.npArtist.textContent = track ? track.artist : "Pilih lagu dari perpustakaanmu";
+      const album = track && track.album && track.album !== track.title ? track.album : "";
+      els.npArtist.textContent = track
+        ? [track.artist, album].filter(Boolean).join(" · ")
+        : "Pilih lagu dari perpustakaanmu";
     }
     if (els.npAlbum) {
       const album = track && track.album ? String(track.album) : "";
       const provider = online ? track.providerLabel || O.providerLabel(track.provider) : "";
       const parts = [];
-      if (album && track && album !== track.title) parts.push(album);
       if (provider && !parts.includes(provider)) parts.push(provider);
       els.npAlbum.textContent = parts.join(" · ");
     }
     if (els.npContext) {
       const label = s.context && s.context.label ? String(s.context.label) : "";
-      els.npContext.textContent = label || (online ? "Dari internet" : "Sedang diputar");
+      const source = track && track.album ? track.album : label || (online ? "internet" : "Perpustakaan");
+      els.npContext.textContent = "From " + source;
     }
 
     const liked = !!track && !!track.liked;
@@ -995,7 +991,7 @@
       els.npRepeat.setAttribute("title", labels[s.repeat] || labels.off);
     }
     if (els.npRepeatOne) els.npRepeatOne.hidden = s.repeat !== "one";
-    if (els.npQueue) els.npQueue.setAttribute("aria-pressed", state.queueOpen ? "true" : "false");
+    // npExpand does not need aria-pressed sync
 
     updateNowPlayingVolume({ volume: s.volume, muted: s.muted });
   }
@@ -1017,7 +1013,10 @@
       U.fmtTime(current) + " dari " + U.fmtTime(duration)
     );
     if (els.npCurTime) els.npCurTime.textContent = U.fmtTime(current);
-    if (els.npDurTime) els.npDurTime.textContent = U.fmtTime(duration);
+    if (els.npDurTime) {
+      const remaining = Math.max(0, duration - current);
+      els.npDurTime.textContent = duration > 0 ? "-" + U.fmtTime(remaining) : U.fmtTime(0);
+    }
   }
 
   function updateNowPlayingVolume(detail) {
@@ -1221,11 +1220,6 @@
       els.lyricsArtist.textContent = track ? track.artist || "" : "";
       els.lyricsArtist.hidden = !track || !track.artist;
     }
-    if (els.lyricsBackdrop) {
-      const art = track ? L.trackArt(track) : "";
-      if (els.lyricsBackdrop.getAttribute("src") !== art) els.lyricsBackdrop.src = art;
-      els.lyricsBackdrop.alt = "";
-    }
     if (els.lyricsMeta) {
       if (!track) {
         els.lyricsMeta.textContent = "Pilih lagu untuk melihat lirik";
@@ -1386,14 +1380,16 @@
   function setLyricsOpen(open) {
     const next = !!open;
     if (next === state.lyricsOpen) return;
-    if (next && state.nowPlayingOpen) closeNowPlaying();
+    if (next && !P.currentTrack()) return;
     if (next && state.queueOpen) setQueueOpen(false);
+    if (next && !state.nowPlayingOpen) {
+      setNowPlayingOpen(true);
+      // Batal membuka lirik bila Now Playing tidak jadi terbuka (mis. tidak
+      // ada lagu aktif).
+      if (!state.nowPlayingOpen) return;
+    }
     state.lyricsOpen = next;
 
-    if (state.lyricsCloseTimer) {
-      window.clearTimeout(state.lyricsCloseTimer);
-      state.lyricsCloseTimer = 0;
-    }
     if (state.lyricsScrollTimer) {
       window.clearTimeout(state.lyricsScrollTimer);
       state.lyricsScrollTimer = 0;
@@ -1405,45 +1401,21 @@
       state.lyricsLoadingTrackId = "";
     }
     if (els.lyricsPanel) {
+      // Panel lirik tidak pernah display:none agar transisi buka/tutup tetap
+      // berjalan; sembunyikan lewat aria-hidden + CSS (opacity/visibility).
       els.lyricsPanel.setAttribute("aria-hidden", next ? "false" : "true");
-      if (next) {
-        els.lyricsPanel.hidden = false;
-        // Paksa reflow agar transisi opacity pasti berjalan meski tab tidak aktif.
-        void els.lyricsPanel.offsetWidth;
-        els.lyricsPanel.classList.add("is-open");
-      } else {
-        els.lyricsPanel.classList.remove("is-open");
-        state.lyricsCloseTimer = window.setTimeout(() => {
-          state.lyricsCloseTimer = 0;
-          if (!state.lyricsOpen && els.lyricsPanel) els.lyricsPanel.hidden = true;
-        }, 380);
-      }
     }
     $$(".lyrics-toggle").forEach((button) => {
       button.setAttribute("aria-pressed", next ? "true" : "false");
+      button.title = next ? "Tutup lirik" : "Buka lirik";
+      button.setAttribute("aria-label", next ? "Tutup lirik" : "Buka lirik");
     });
-    document.body.classList.toggle("has-lyrics", next);
+    if (els.nowPlaying) els.nowPlaying.classList.toggle("now-playing--lyrics", next);
 
     if (next) {
+      // renderLyricsPanel() langsung menggulir ke baris aktif, jadi posisi
+      // gulir tidak perlu direset saat menutup (bisa terlihat melompat).
       renderLyricsPanel();
-      if (els.lyricsClose && typeof els.lyricsClose.focus === "function") {
-        els.lyricsClose.focus({ preventScroll: true });
-      }
-    } else {
-      if (els.lyricsBody) {
-        const body = els.lyricsBody;
-        window.setTimeout(() => {
-          if (!state.lyricsOpen) body.scrollTop = 0;
-        }, 400);
-      }
-      if (
-        els.btnLyrics &&
-        els.lyricsPanel &&
-        document.activeElement &&
-        els.lyricsPanel.contains(document.activeElement)
-      ) {
-        els.btnLyrics.focus({ preventScroll: true });
-      }
     }
   }
 
@@ -1548,8 +1520,15 @@
       els.playerDownload.addEventListener("click", () => downloadCurrentTrack());
     }
     if (els.playerArtButton) els.playerArtButton.addEventListener("click", openNowPlaying);
-    if (els.playerTitle) els.playerTitle.addEventListener("click", openCurrentAlbum);
+    if (els.playerTitle) els.playerTitle.addEventListener("click", openNowPlaying);
     if (els.playerArtist) els.playerArtist.addEventListener("click", openCurrentArtist);
+    if (els.player) {
+      els.player.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target || target.closest("button, a, input, [role='slider']")) return;
+        openNowPlaying();
+      });
+    }
 
     if (els.npClose) els.npClose.addEventListener("click", closeNowPlaying);
     if (els.npPlay) {
@@ -1568,16 +1547,13 @@
         if (P.state.currentId) toggleLike(P.state.currentId);
       });
     }
-    if (els.npLyrics) {
-      els.npLyrics.addEventListener("click", () => {
-        closeNowPlaying();
-        setLyricsOpen(true);
-      });
-    }
-    if (els.npQueue) {
-      els.npQueue.addEventListener("click", () => {
-        closeNowPlaying();
-        setQueueOpen(true);
+    if (els.npExpand) {
+      els.npExpand.addEventListener("click", () => {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        } else {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
       });
     }
 
@@ -1603,10 +1579,8 @@
     if (els.btnQueue) els.btnQueue.addEventListener("click", toggleQueue);
     if (els.topbarQueue) els.topbarQueue.addEventListener("click", toggleQueue);
     $$(".lyrics-toggle").forEach((button) => {
-      if (button === els.npLyrics) return;
       button.addEventListener("click", toggleLyrics);
     });
-    if (els.lyricsClose) els.lyricsClose.addEventListener("click", () => setLyricsOpen(false));
     if (els.queueClose) els.queueClose.addEventListener("click", () => setQueueOpen(false));
     if (els.queueClear) {
       els.queueClear.addEventListener("click", () => {
@@ -1628,21 +1602,6 @@
       return true;
     } catch (error) {
       return false;
-    }
-  }
-
-  function openCurrentAlbum() {
-    const track = P.currentTrack();
-    if (!track) return;
-    if (track.online) {
-      if (openExternalUrl(track.externalUrl)) return;
-      navigate("#/search?q=" + encodeURIComponent(track.artist));
-      return;
-    }
-    if (track.albumKey && L.getAlbum(track.albumKey)) {
-      navigate("#/album/" + encodeURIComponent(track.albumKey));
-    } else {
-      navigate("#/artist/" + encodeURIComponent(track.artistKey));
     }
   }
 
