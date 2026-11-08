@@ -99,6 +99,8 @@
     lyricsSearchedTrackIds: new Set(),
     lyricsUserScrollUntil: 0,
     lyricsScrollTimer: 0,
+    lyricsScrollFrame: 0,
+    lyricsScrollLastTime: 0,
     youtubeFailedIds: new Set(),
     youtubeSkipTimer: 0,
     youtubeErrorToast: null,
@@ -1335,7 +1337,7 @@
     if (!line) {
       // Sebelum baris pertama (atau saat lagu diulang), kembali ke awal lirik.
       if ((previous >= 0 || force) && els.lyricsBody.scrollTop > 0) {
-        els.lyricsBody.scrollTo({ top: 0, behavior: force ? "auto" : "smooth" });
+        scrollLyricsToTop(!!force);
       }
       return;
     }
@@ -1348,25 +1350,84 @@
   const LYRICS_ANCHOR = 0.42;
   const LYRICS_USER_PAUSE_MS = 4200;
 
-  function scrollLyricsTo(line, instant) {
-    if (!els.lyricsBody || !line) return;
+  function getLyricsScrollTarget(line) {
     const body = els.lyricsBody;
+    if (!body || !line) return 0;
     const box = body.getBoundingClientRect();
     const rect = line.getBoundingClientRect();
     const target =
       body.scrollTop + (rect.top - box.top) - box.height * LYRICS_ANCHOR + rect.height / 2;
-    const max = Math.max(0, body.scrollHeight - box.height);
-    const top = U.clamp(target, 0, max);
+    return U.clamp(target, 0, Math.max(0, body.scrollHeight - box.height));
+  }
+
+  function stopLyricsScroll() {
+    if (state.lyricsScrollFrame) window.cancelAnimationFrame(state.lyricsScrollFrame);
+    state.lyricsScrollFrame = 0;
+    state.lyricsScrollLastTime = 0;
+  }
+
+  function animateLyricsScroll(timestamp) {
+    const body = els.lyricsBody;
+    if (!body || !state.lyricsOpen) {
+      stopLyricsScroll();
+      return;
+    }
+    const line =
+      state.lyricsActiveIndex >= 0
+        ? $$(".lyrics-line", body)[state.lyricsActiveIndex]
+        : null;
+    if (state.lyricsActiveIndex >= 0 && !line) {
+      stopLyricsScroll();
+      return;
+    }
+
+    const elapsed = state.lyricsScrollLastTime
+      ? Math.min(timestamp - state.lyricsScrollLastTime, 32)
+      : 16;
+    state.lyricsScrollLastTime = timestamp;
+    const target = line ? getLyricsScrollTarget(line) : 0;
+    const remaining = target - body.scrollTop;
+    if (Math.abs(remaining) < 0.5) {
+      body.scrollTop = target;
+      stopLyricsScroll();
+      return;
+    }
+
+    body.scrollTop += remaining * (1 - Math.exp(-elapsed / 220));
+    state.lyricsScrollFrame = window.requestAnimationFrame(animateLyricsScroll);
+  }
+
+  function scrollLyricsToTop(instant) {
+    const body = els.lyricsBody;
+    if (!body) return;
+    stopLyricsScroll();
+    if (instant || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      body.scrollTop = 0;
+      return;
+    }
+    state.lyricsActiveIndex = -1;
+    state.lyricsScrollFrame = window.requestAnimationFrame(animateLyricsScroll);
+  }
+
+  function scrollLyricsTo(line, instant) {
+    if (!els.lyricsBody || !line) return;
+    const body = els.lyricsBody;
+    const top = getLyricsScrollTarget(line);
     if (Math.abs(top - body.scrollTop) < 1.5) return;
-    if (typeof body.scrollTo === "function") {
-      body.scrollTo({ top, behavior: instant ? "auto" : "smooth" });
-    } else {
+    if (instant || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      stopLyricsScroll();
       body.scrollTop = top;
+      return;
+    }
+    if (!state.lyricsScrollFrame) {
+      state.lyricsScrollLastTime = 0;
+      state.lyricsScrollFrame = window.requestAnimationFrame(animateLyricsScroll);
     }
   }
 
   function markLyricsUserScroll() {
     if (!state.lyricsOpen) return;
+    stopLyricsScroll();
     state.lyricsUserScrollUntil = Date.now() + LYRICS_USER_PAUSE_MS;
     if (state.lyricsScrollTimer) window.clearTimeout(state.lyricsScrollTimer);
     state.lyricsScrollTimer = window.setTimeout(() => {
@@ -1394,6 +1455,7 @@
       window.clearTimeout(state.lyricsScrollTimer);
       state.lyricsScrollTimer = 0;
     }
+    stopLyricsScroll();
     state.lyricsUserScrollUntil = 0;
 
     if (!next) {

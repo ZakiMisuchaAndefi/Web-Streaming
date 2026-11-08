@@ -578,10 +578,10 @@
   transform: scale(calc(1 - min(var(--dist), 7) * 0.02));
   transform-origin: left center;
   transition:
-    opacity 560ms var(--ease),
+    opacity 560ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 700ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 560ms var(--ease),
-    color 560ms var(--ease);
+    filter 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 560ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .lyrics-line:hover,
@@ -923,7 +923,7 @@
 /* ==========================================================================
    Now Playing — komposisi "Vinyl" (frame 05 & 06)
    Panel kaca penuh di atas latar hitam dengan tint lembut. Tanpa lirik:
-   satu kolom 480px (sampul 344). Dengan lirik: kolom kiri 352px + lirik
+   satu kolom 410px (sampul 344). Dengan lirik: kolom kiri 352px + lirik
    568px, dengan transisi lembut seperti Apple Music.
    ========================================================================== */
 
@@ -962,7 +962,7 @@
   --shadow-glass: 0 6px 16px rgba(0, 0, 0, 0.16);
   --pill-scrim: rgba(21, 21, 24, 0.95);
   --np-accent: var(--pink);
-  --np-col: 480px;
+  --np-col: 410px;
   --np-art: 344px;
   --np-narrow: 352px;
   --np-lyrics: 568px;
@@ -1367,8 +1367,12 @@ body.has-now-playing {
 }
 
 .now-playing__play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 72px;
   height: 72px;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: var(--np-accent);
   color: var(--surface-deep);
@@ -1427,8 +1431,8 @@ body.has-now-playing {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  width: min(100%, 304px);
+  gap: 8px;
+  width: min(100%, 248px);
   flex: none;
   transform: none;
 }
@@ -1445,6 +1449,14 @@ body.has-now-playing {
   height: 16px;
 }
 
+.now-playing__volume-max {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--ink);
+  opacity: 0.45;
+}
+
 .now-playing__mute.is-active {
   opacity: 1;
 }
@@ -1452,8 +1464,9 @@ body.has-now-playing {
 .now-playing__volume-slider,
 .now-playing .now-playing__volume-slider {
   display: flex;
-  width: min(224px, 40vw);
+  width: min(184px, 40vw);
   margin-right: 0;
+  flex: 1 1 auto;
 }
 
 .now-playing__volume-slider .volume__rail {
@@ -1555,23 +1568,28 @@ body.has-now-playing {
   letter-spacing: -0.015em;
   text-align: left;
   text-wrap: pretty;
-  opacity: 0.38;
-  filter: none;
-  transform: none;
+  opacity: calc(1 - min(var(--dist, 6), 6) * 0.13);
+  filter: blur(calc(min(var(--dist, 6), 5) * 0.9px));
+  transform: scale(calc(1 - min(var(--dist, 6), 7) * 0.02));
+  transform-origin: left center;
   transition:
-    opacity 420ms var(--ease),
-    color 420ms var(--ease),
-    font-size 320ms var(--ease-out);
+    opacity 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    font-size 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .now-playing__lyrics .lyrics-line:hover {
-  opacity: 0.72;
+  opacity: calc(1 - min(var(--dist, 6), 6) * 0.13);
 }
 
 .now-playing__lyrics .lyrics-line.is-active {
   color: var(--np-accent);
   font-size: clamp(25px, 2.5vw, 36px);
   opacity: 1;
+  filter: none;
+  transform: none;
   text-shadow: none;
 }
 
@@ -1635,32 +1653,36 @@ body.has-now-playing {
 
 .now-playing--lyrics .now-playing__stage {
   grid-template-columns: minmax(0, var(--np-narrow)) minmax(0, var(--np-lyrics));
-  column-gap: clamp(40px, 14.4vw, 208px);
+  column-gap: clamp(40px, 11.7vw, 170px);
   padding-top: clamp(20px, 9.3vh, 84px);
-  padding-left: clamp(0px, 4.7vw, 68px);
+  padding-left: clamp(0px, 7.4vw, 108px);
 }
 
 .now-playing--lyrics .now-playing__main {
-  align-items: stretch;
-  width: 100%;
+  align-items: center;
+  justify-self: center;
+  width: min(100%, var(--np-narrow));
 }
 
 .now-playing--lyrics .now-playing__art {
-  align-self: flex-start;
+  align-self: center;
   width: clamp(180px, 39.1vh, var(--np-narrow));
   max-width: 100%;
   margin: 0;
 }
 
 .now-playing--lyrics .now-playing__details {
-  width: min(100%, 302px);
+  width: min(100%, clamp(180px, 39.1vh, var(--np-narrow)));
   min-height: 80px;
   margin-top: clamp(16px, 3.6vh, 32px);
+  margin-inline: auto;
   text-align: left;
 }
 
 .now-playing--lyrics .now-playing__titles {
+  flex: 1;
   justify-items: start;
+  text-align: left;
 }
 
 .now-playing--lyrics .now-playing__title {
@@ -1668,10 +1690,12 @@ body.has-now-playing {
 }
 
 .now-playing--lyrics .now-playing__actions {
-  right: -50px;
+  right: 0;
 }
 
 .now-playing--lyrics .now-playing__timeline {
+  width: min(100%, clamp(180px, 39.1vh, var(--np-narrow)));
+  margin-inline: auto;
   margin-top: clamp(12px, 2.2vh, 20px);
 }
 
@@ -1685,16 +1709,16 @@ body.has-now-playing {
 
 @media (min-width: 1181px) {
   .now-playing--lyrics .now-playing__controls {
-    width: 400px;
+    width: 320px;
     max-width: none;
-    margin-left: -24px;
-    gap: 32px;
+    margin-left: 0;
+    gap: 14px;
   }
 }
 
 .now-playing--lyrics .now-playing__volume {
   align-self: center;
-  width: min(100%, 280px);
+  width: min(100%, 240px);
 }
 
 /* Penyesuaian layar ------------------------------------------------------- */
@@ -1715,7 +1739,7 @@ body.has-now-playing {
   .now-playing--lyrics .now-playing__controls {
     width: 100%;
     margin-left: 0;
-    gap: clamp(8px, 1.4vw, 18px);
+    gap: clamp(4px, 1vw, 10px);
   }
 
   .now-playing--lyrics .now-playing__art {
@@ -1833,7 +1857,9 @@ body.has-now-playing {
   }
 
   .now-playing__details {
+    width: min(100%, 310px);
     min-height: 64px;
+    margin-inline: auto;
     margin-top: 16px;
     text-align: left;
   }
@@ -1981,11 +2007,11 @@ body.has-now-playing {
 /* Layar pendek: rapatkan jarak vertikal agar panel tidak terpotong. */
 @media (min-width: 621px) and (max-height: 820px) {
   .now-playing__stage {
-    padding-top: clamp(8px, 2.6vh, 24px);
+    padding-top: clamp(8px, 3.1vh, 24px);
   }
 
   .now-playing__art {
-    width: clamp(150px, 37vh, 310px);
+    width: clamp(150px, 38.2vh, 310px);
   }
 
   .now-playing__details {
@@ -2012,25 +2038,39 @@ body.has-now-playing {
   }
 
   .now-playing--lyrics .now-playing__stage {
-    padding-top: clamp(12px, 5vh, 40px);
+    padding-top: clamp(20px, 8.3vh, 64px);
   }
 
   .now-playing--lyrics .now-playing__art {
-    width: clamp(150px, 37vh, 320px);
+    width: clamp(150px, 39.1vh, 320px);
   }
 
   .now-playing--lyrics .now-playing__details {
     min-height: 64px;
-    margin-top: clamp(10px, 2.6vh, 22px);
+    margin-top: clamp(8px, 1.8vh, 14px);
   }
 
   .now-playing--lyrics .now-playing__timeline {
-    margin-top: clamp(10px, 2.2vh, 18px);
+    margin-top: clamp(6px, 1.3vh, 10px);
   }
 
   .now-playing--lyrics .now-playing__controls {
-    margin-top: clamp(8px, 2vh, 16px);
-    margin-bottom: clamp(12px, 3.2vh, 26px);
+    margin-top: clamp(6px, 1.3vh, 10px);
+    margin-bottom: clamp(8px, 1.6vh, 12px);
+  }
+
+  .now-playing--lyrics .now-playing__volume {
+    margin-top: 0;
+  }
+}
+
+@media (min-width: 621px) and (max-height: 700px) {
+  .now-playing--lyrics .now-playing__stage {
+    padding-top: clamp(12px, 5vh, 40px);
+  }
+
+  .now-playing--lyrics .now-playing__art {
+    width: clamp(150px, 34vh, 280px);
   }
 }
 
@@ -2045,6 +2085,7 @@ body.has-now-playing {
   }
 
   .now-playing__details {
+    width: min(100%, 240px);
     min-height: 56px;
   }
 }
@@ -2059,7 +2100,8 @@ body.has-now-playing {
   .now-playing__controls,
   .now-playing__volume,
   .now-playing__actions,
-  .now-playing__lyrics {
+  .now-playing__lyrics,
+  .now-playing__lyrics .lyrics-line {
     transition: none;
   }
 }
