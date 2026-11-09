@@ -75,6 +75,7 @@
   }
 
   const els = {};
+  let lastAnalyticsPath = "";
   const state = {
     booted: false,
     currentRoute: null,
@@ -396,6 +397,16 @@
     }
 
     renderRoute({ focusSearch: opts.focusSearch !== false });
+    trackPageView();
+  }
+
+  function trackPageView() {
+    if (typeof window.va !== "function" || !state.currentRoute) return;
+
+    const path = location.pathname + "#/" + state.currentRoute.name;
+    if (path === lastAnalyticsPath) return;
+    lastAnalyticsPath = path;
+    window.va("pageview", { path: path });
   }
 
   function renderRoute(options) {
@@ -1890,6 +1901,7 @@
       }
       state.historyIndex = index;
       renderRoute({ focusSearch: false });
+      trackPageView();
       closeSidebar();
       UI.closeMenu();
     });

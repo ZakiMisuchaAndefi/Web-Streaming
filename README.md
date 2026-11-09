@@ -30,6 +30,7 @@ Tema gelap dan terang dengan aksen merah khas Apple Music, lengkap dengan sampul
 - **Perpustakaan demo** — 12 lagu yang dibuat secara prosedural untuk mencoba semua fitur tanpa file pribadi.
 - **Responsif** — sidebar berubah menjadi laci di tablet, dan tata letak ponsel tetap nyaman digunakan.
 - **Pintasan keyboard** — kendalikan pemutaran dan pencarian tanpa meninggalkan keyboard.
+- **Analitik web** — kunjungan halaman dan navigasi aplikasi dicatat melalui Vercel Web Analytics saat di-deploy ke Vercel.
 
 ## Menjalankan
 
@@ -55,6 +56,7 @@ Repo ini juga siap di-deploy ke **Vercel** tanpa build step:
 1. Impor repo di Vercel dan biarkan **Framework Preset** di **Other**.
 2. `api/*.js` otomatis menjadi serverless function (`vercel.json` sudah mengatur `maxDuration`).
 3. Pencarian, beranda, dan radio langsung berjalan lewat fungsi serverless. Pemutaran audio YouTube memakai **instance Invidious** sebagai sumber audio: YouTube menolak permintaan audio dari IP datacenter Vercel, jadi `api/health` memeriksa instance yang tersedia dan browser memutar audionya langsung. Hasilnya tanpa iklan, durasi penuh, dan video yang melarang embed tetap bisa diputar. Jika instance sedang mati, aplikasi otomatis memakai pemutar resmi YouTube sebagai cadangan.
+4. Aktifkan **Web Analytics** dari dashboard proyek Vercel, lalu deploy ulang. Script Analytics sudah terpasang dan navigasi aplikasi ikut dicatat; query pencarian dan ID detail tidak dikirim sebagai path.
 
 > Di Vercel, `ffmpeg` tidak ikut terpasang sehingga tombol unduhan MP3 nonaktif. Untuk unduhan MP3, jalankan versi lokal dengan `ffmpeg.exe`.
 
