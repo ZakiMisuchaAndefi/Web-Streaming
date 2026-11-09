@@ -20,7 +20,10 @@
   width: min(920px, calc(100vw - var(--sidebar-width) - 24px));
   margin-inline: auto;
   display: grid;
-  grid-template-columns: minmax(250px, 1fr) minmax(310px, 1.35fr) minmax(205px, 1fr);
+  /* Sisi kiri dan kanan sengaja sama lebar (1fr : 1fr) supaya tombol putar
+     dan bar progres selalu tepat di garis tengah pill, berapa pun lebar
+     jendela. Rasio tengah 1.37 memberi ruang untuk transport + timeline. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.37fr) minmax(0, 1fr);
   align-items: center;
   gap: var(--space-4);
   /* Ruang di kaki pill memberi jarak antara tombol transport dan bar progres. */
