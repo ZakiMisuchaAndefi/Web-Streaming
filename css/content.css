@@ -2748,3 +2748,427 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   Vinyl — panel halaman (Beranda, Cari, Pengaturan)
+   Panel kaca 1108×756 ala Figma: fill 8%, border 11%, radius 14, padding 32.
+   ========================================================================== */
+
+.page--panel {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-panel);
+  background: var(--glass-1);
+  box-shadow: var(--shadow-glass);
+}
+
+/* Judul bagian: 12px/600 uppercase, warna 62% (Figma "PICKED FOR YOU"). */
+.page--panel .section {
+  margin-top: 20px;
+}
+
+.page--panel .section__head {
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.page--panel .section__title {
+  font-family: var(--font-inter);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.page--panel .section__sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.page--panel .section__actions .text-btn {
+  padding: 4px 0;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.page--panel .section__actions .text-btn:hover {
+  background: transparent;
+  color: var(--ink);
+}
+
+/* -------- Beranda: sapaan -------- */
+
+.home-greeting {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.home-greeting__text {
+  min-width: 0;
+}
+
+.home-greeting__title {
+  font-family: var(--font-inter);
+  font-size: 29px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.home-greeting__sub {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: var(--leading);
+}
+
+.home-made-for-you {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: none;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  background: var(--glass-1);
+  color: var(--ink-2);
+  font-family: var(--font-inter);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--speed) var(--ease), color var(--speed) var(--ease),
+    border-color var(--speed) var(--ease);
+}
+
+.home-made-for-you:hover {
+  border-color: var(--border-glass-strong);
+  background: var(--pink-soft);
+  color: var(--ink);
+}
+
+.home-made-for-you__note {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* -------- Beranda: album pilihan (Figma 4 × 220, gap 28) -------- */
+
+.album-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 28px;
+}
+
+.album-row .card__art {
+  border-radius: var(--radius-tile);
+}
+
+.album-row .card__title {
+  margin-top: 10px;
+  font-family: var(--font-inter);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
+.album-row .card__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+/* -------- Beranda: mulai cepat sebagai baris ringkas (332×76) -------- */
+
+.page--panel .quick-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 0;
+}
+
+.page--panel .quick-card {
+  height: 76px;
+  padding: 0 16px 0 8px;
+  gap: 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--glass-1);
+}
+
+.page--panel .quick-card:hover {
+  border-color: var(--border-glass);
+  background: var(--glass-2);
+  transform: none;
+}
+
+.page--panel .quick-card__art {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-tile);
+}
+
+.page--panel .quick-card__title {
+  font-family: var(--font-inter);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
+.page--panel .quick-card__play {
+  background: var(--pink-soft);
+  color: var(--ink);
+}
+
+/* Di tema terang kaca 8% menyatu dengan panel; beri kontras tipis. */
+[data-theme="light"] .page--panel .quick-card {
+  border-color: rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.035);
+}
+
+[data-theme="light"] .page--panel .quick-card:hover {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* -------- Beranda: feed rekomendasi & daftar lagu -------- */
+
+.page--panel .home-feed {
+  margin-top: 20px;
+}
+
+.page--panel .home-feed .section:first-child {
+  margin-top: 0;
+}
+
+.page--panel .home-grid {
+  gap: 22px 20px;
+}
+
+.page--panel .home-card__art {
+  border-radius: var(--radius-tile);
+}
+
+.page--panel .home-card__title {
+  font-family: var(--font-inter);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.page--panel .home-card__sub {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.page--panel .tracklist__head {
+  border-bottom-color: var(--border-glass);
+  color: var(--ink-3);
+}
+
+.page--panel .track-row {
+  min-height: 64px;
+  border-radius: var(--radius-control);
+}
+
+.page--panel .track-row.is-current {
+  background: var(--pink-tint);
+}
+
+.page--panel .track-row.is-current .track-row__name {
+  color: var(--pink);
+}
+
+.page--panel .track-row__art {
+  border-radius: var(--radius-control);
+}
+
+/* -------- Pencarian (Figma 04 · Search results) -------- */
+
+.page--panel .search-box {
+  max-width: none;
+  margin: 0;
+}
+
+.page--panel .search-box .icon {
+  left: 20px;
+  width: 20px;
+  height: 20px;
+  color: var(--ink-2);
+}
+
+.page--panel .search-box__input {
+  height: 56px;
+  padding: 0 52px 0 54px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  background: var(--pink-tint);
+  color: var(--ink);
+  font-family: var(--font-inter);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.page--panel .search-box__input::placeholder {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.page--panel .search-box__input:hover {
+  background: var(--pink-soft);
+}
+
+.page--panel .search-box__input:focus {
+  border-color: var(--border-glass-strong);
+  background: var(--pink-tint);
+  box-shadow: 0 0 0 3px var(--pink-tint);
+}
+
+.page--panel .search-box__clear {
+  right: 12px;
+}
+
+.search-head {
+  margin-top: 20px;
+}
+
+.search-head__title {
+  font-family: var(--font-inter);
+  font-size: 29px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.search-head__sub {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: var(--leading);
+}
+
+.page--panel .search-chips {
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.page--panel .chip {
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  background: var(--glass-1);
+  color: var(--ink-2);
+  font-family: var(--font-inter);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.page--panel .chip:hover {
+  border-color: var(--border-glass-strong);
+  background: var(--pink-soft);
+  color: var(--ink);
+}
+
+.page--panel .search-results {
+  margin-top: 20px;
+}
+
+.page--panel .search-results .section {
+  margin-top: 20px;
+}
+
+.page--panel .search-results > .section:first-child {
+  margin-top: 0;
+}
+
+.page--panel .search-summary {
+  margin-bottom: 12px;
+}
+
+.page--panel .search-summary p {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.page--panel .search-summary strong {
+  color: var(--ink);
+}
+
+.page--panel .search-online-empty {
+  color: var(--ink-3);
+}
+
+.page--panel .search-empty {
+  margin-top: 0;
+}
+
+/* -------- Penyesuaian lebar -------- */
+
+@media (max-width: 1120px) {
+  .album-row {
+    gap: 24px;
+  }
+
+  .page--panel .quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .page--panel {
+    padding: 24px;
+  }
+
+  .home-greeting__title {
+    font-size: 25px;
+  }
+}
+
+@media (max-width: 760px) {
+  .album-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
+@media (max-width: 700px) {
+  .page--panel {
+    padding: 18px;
+  }
+
+  .page--panel .quick-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .home-greeting {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .home-greeting__title,
+  .search-head__title {
+    font-size: 23px;
+  }
+
+  .home-made-for-you {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 11px;
+  }
+}
+

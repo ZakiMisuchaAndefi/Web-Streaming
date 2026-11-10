@@ -873,30 +873,20 @@
 
   function homeHero(hasLibrary) {
     return (
-      '<section class="home-hero">' +
-      '<div class="home-hero__glow" aria-hidden="true"></div>' +
-      '<div class="home-hero__content">' +
-      '<p class="home-hero__eyebrow eyebrow">Dengarkan sekarang</p>' +
-      "<h1>" +
+      '<header class="home-greeting">' +
+      '<div class="home-greeting__text">' +
+      '<h1 class="home-greeting__title">' +
       esc(greetingText()) +
       ".</h1>" +
-      '<p class="home-hero__desc">Rekomendasi lagu, stasiun radio, dan playlist yang dibuat untukmu — langsung diputar tanpa impor.</p>' +
-      '<div class="home-hero__actions">' +
-      '<button class="btn btn--primary" type="button" data-action="home-play-section" data-section="rekomendasi">' +
-      icon("play") +
-      "<span>Putar rekomendasi</span></button>" +
-      '<button class="btn btn--secondary" type="button" data-action="home-play-section" data-section="rekomendasi" data-shuffle="true">' +
-      icon("shuffle") +
-      "<span>Acak</span></button>" +
-      '<a class="btn btn--secondary" href="#/search">' +
-      icon("search") +
-      "<span>Cari lagu</span></a>" +
+      '<p class="home-greeting__sub">' +
       (hasLibrary
-        ? ""
-        : '<button class="btn btn--secondary" type="button" data-action="open-import">' +
-          icon("upload") +
-          "<span>Impor koleksi</span></button>") +
-      "</div></div></section>"
+        ? "Temukan soundtrack harianmu dari koleksi dan rekomendasi pilihan."
+        : "Temukan soundtrack harianmu — rekomendasi langsung diputar tanpa impor.") +
+      "</p></div>" +
+      '<button class="home-made-for-you" type="button" data-action="home-play-section" data-section="rekomendasi" title="Putar rekomendasi untukmu">' +
+      '<span class="home-made-for-you__note" aria-hidden="true">♫</span>' +
+      "<span>Dibuat untukmu</span></button>" +
+      "</header>"
     );
   }
 
@@ -1157,31 +1147,36 @@
     const recentTracks = L.recent().slice(0, 5);
     const favorites = L.favorites().slice(0, 5);
     const mixes = mixList();
-    const freshAlbums = albums.slice(0, 7);
+    const freshAlbums = albums.slice(0, 4);
+    const tiles = homeTiles();
 
     return {
       title: "Dengarkan Sekarang",
       html:
-        '<div class="page home-page">' +
+        '<div class="page page--panel home-page">' +
         homeHero(hasLibrary) +
-        homeTiles() +
+        (freshAlbums.length
+          ? section(
+              "Pilihan untukmu",
+              '<div class="album-row">' + freshAlbums.map(albumCard).join("") + "</div>",
+              { actions: '<a class="text-btn" href="#/albums">Lihat semua ↗</a>' }
+            )
+          : "") +
+        (tiles
+          ? section("Mulai cepat", tiles, {
+              actions: '<a class="text-btn" href="#/browse">Jelajahi ↗</a>'
+            })
+          : "") +
         '<div id="homeFeed" class="home-feed">' +
         homeFeedHTML(AM.Home ? AM.Home.snapshot() : null) +
         "</div>" +
-        (freshAlbums.length
-          ? section(
-              "Baru ditambahkan di perpustakaanmu",
-              '<div class="grid">' + freshAlbums.map(albumCard).join("") + "</div>",
-              { actions: '<a class="text-btn" href="#/albums">Lihat semua</a>' }
-            )
-          : "") +
         (recentTracks.length
           ? section(
-              "Kembali diputar",
+              "Terakhir diputar",
               tracklist(recentTracks, { queue: { type: "recent" }, showAlbum: true }),
               {
                 sub: "Lagu lokal yang terakhir kamu dengarkan",
-                actions: '<a class="text-btn" href="#/recent">Lihat semua</a>'
+                actions: '<a class="text-btn" href="#/recent">Lihat semua ↗</a>'
               }
             )
           : "") +
@@ -1196,7 +1191,7 @@
           ? section(
               "Disukai",
               tracklist(favorites, { queue: { type: "favorites" }, showAlbum: true }),
-              { actions: '<a class="text-btn" href="#/favorites">Lihat semua</a>' }
+              { actions: '<a class="text-btn" href="#/favorites">Lihat semua ↗</a>' }
             )
           : "") +
         "</div>"
@@ -1786,6 +1781,13 @@
     );
   }
 
+  function searchHeadContent(query) {
+    const value = normalizeSearchText(query);
+    return value
+      ? "Menampilkan hasil untuk \u201c" + esc(value) + "\u201d"
+      : "Cari lagu di perpustakaanmu dan YouTube — hasil muncul langsung di sini.";
+  }
+
   function searchView(route) {
     const query = (route.query && route.query.q) || "";
     const genres = L.genres().slice(0, 6);
@@ -1802,13 +1804,10 @@
     return {
       title: "Cari",
       html:
-        '<div class="page">' +
-        '<div class="search-hero">' +
-        "<h1>Cari</h1>" +
-        "<p>Cari lagu langsung di perpustakaanmu dan YouTube — tanpa pindah halaman.</p>" +
+        '<div class="page page--panel search-page">' +
         '<div class="search-box" role="search">' +
         icon("search") +
-        '<input class="search-box__input" id="searchInput" type="search" autocomplete="off" spellcheck="false" placeholder="Lagu, artis, album…" value="' +
+        '<input class="search-box__input" id="searchInput" type="search" autocomplete="off" spellcheck="false" placeholder="Cari lagu, artis, album…" value="' +
         esc(query) +
         '" aria-label="Cari musik">' +
         '<button class="icon-btn search-box__clear" type="button" data-action="clear-search" title="Bersihkan" aria-label="Bersihkan pencarian"' +
@@ -1817,8 +1816,12 @@
         icon("x") +
         "</button>" +
         "</div>" +
+        '<header class="search-head">' +
+        '<h1 class="search-head__title">Hasil pencarian</h1>' +
+        '<p class="search-head__sub" id="searchHead">' +
+        searchHeadContent(query) +
+        "</p></header>" +
         (chips ? '<div class="search-chips">' + chips + "</div>" : "") +
-        "</div>" +
         '<div class="search-results" id="searchResults">' +
         (query ? "" : searchEmptyContent()) +
         "</div>" +
@@ -1910,6 +1913,8 @@
     const input = document.getElementById("searchInput");
     if (input && input.value !== query) input.value = query;
     const value = normalizeSearchText(query);
+    const head = document.getElementById("searchHead");
+    if (head) head.innerHTML = searchHeadContent(value);
     if (!value) {
       container.innerHTML = searchEmptyContent();
       return;
@@ -2175,11 +2180,11 @@
     return {
       title: "Pengaturan",
       html:
-        '<div class="page page--settings">' +
-        pageHead("Pengaturan", {
-          eyebrow: "Musik",
-          sub: "Tampilan, pemutaran, audio, dan data perpustakaan dalam satu tempat."
-        }) +
+        '<div class="page page--panel page--settings">' +
+        '<header class="settings-head">' +
+        '<h1 class="settings-head__title">Pengaturan</h1>' +
+        '<p class="settings-head__sub">Tampilan, pemutaran, audio, dan data perpustakaan dalam satu tempat.</p>' +
+        "</header>" +
         '<div class="settings-page" id="settingsRoot">' +
         body +
         "</div></div>"

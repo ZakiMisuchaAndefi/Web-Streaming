@@ -719,3 +719,121 @@
   color: var(--text-2);
   font-weight: 500;
 }
+
+/* --------------------------------------------------------------------------
+   Pengaturan — gaya Vinyl (selaras panel Beranda/Cari)
+   -------------------------------------------------------------------------- */
+
+.page--settings .settings-head {
+  margin-bottom: 20px;
+}
+
+.page--settings .settings-head__title {
+  font-family: var(--font-inter);
+  font-size: 29px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.page--settings .settings-head__sub {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: var(--leading);
+}
+
+.page--settings .settings-page {
+  max-width: none;
+}
+
+.page--settings .settings {
+  gap: 16px;
+}
+
+.page--settings .settings-group {
+  gap: 0;
+  padding: 6px 18px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-panel);
+  background: var(--glass-1);
+}
+
+[data-theme="light"] .page--settings .settings-group {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.page--settings .settings-group__title {
+  margin: 12px 0 4px;
+  color: var(--ink-2);
+  font-family: var(--font-inter);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.page--settings .settings-row {
+  gap: 20px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.page--settings .settings-row:last-of-type {
+  border-bottom: 0;
+}
+
+.page--settings .settings-row__title {
+  font-family: var(--font-inter);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.page--settings .settings-row__sub {
+  color: var(--ink-2);
+}
+
+.page--settings .segmented {
+  border: 1px solid var(--border-glass);
+  background: var(--surface-hover);
+}
+
+.page--settings .segmented__btn.is-active {
+  background: var(--pink-tint);
+  color: var(--ink);
+}
+
+.page--settings .about-line {
+  color: var(--ink-3);
+  padding: 12px 0 14px;
+}
+
+@media (max-width: 700px) {
+  .page--settings .settings-head__title {
+    font-size: 23px;
+  }
+
+  .page--settings .settings-group {
+    padding: 4px 14px;
+  }
+
+  .page--settings .settings-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .page--settings .settings-row__action {
+    width: 100%;
+  }
+
+  .page--settings .settings-row__action .segmented {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .page--settings .settings-row__action .btn {
+    width: 100%;
+  }
+}
+
