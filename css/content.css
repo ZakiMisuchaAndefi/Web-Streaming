@@ -3172,3 +3172,436 @@
   }
 }
 
+/* --------------------------------------------------------------------------
+   Semua halaman: header, kartu, chip genre, baris ringkas
+   -------------------------------------------------------------------------- */
+
+.page--panel .page-head {
+  align-items: flex-end;
+  margin: 0 0 20px;
+}
+
+.page--panel .page-head__eyebrow {
+  margin-bottom: 4px;
+  color: var(--ink-2);
+  font-family: var(--font-inter);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.page--panel .page-head h1 {
+  font-family: var(--font-inter);
+  font-size: 29px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.page--panel .page-head__sub {
+  margin-top: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: var(--leading);
+}
+
+.page--panel .page-head__actions {
+  padding-bottom: 0;
+  gap: 8px;
+}
+
+.page--panel .page-head__actions .btn {
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  background: var(--pink-tint);
+  color: var(--ink);
+  font-family: var(--font-inter);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: none;
+  transform: none;
+}
+
+.page--panel .page-head__actions .btn:hover {
+  border-color: var(--border-glass-strong);
+  background: var(--pink-soft);
+  transform: none;
+}
+
+.page--panel .page-head__actions .btn .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.page--panel .page-head__actions .segmented {
+  align-items: center;
+  height: 40px;
+  border: 1px solid var(--border-glass);
+  background: var(--glass-1);
+}
+
+.page--panel .page-head__actions .segmented__btn {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.page--panel .page-head__actions .segmented__btn.is-active {
+  background: var(--pink-tint);
+  color: var(--ink);
+}
+
+/* Kartu album/artis/playlist */
+
+.page--panel .grid {
+  gap: 24px 20px;
+}
+
+.page--panel .card__art,
+.page--panel .mix-card__art {
+  border-radius: var(--radius-tile);
+}
+
+.page--panel .card__title {
+  margin-top: 10px;
+  font-family: var(--font-inter);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
+.page--panel .card__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+/* Chip genre: kaca ringkas seperti chip kategori Figma */
+
+.page--panel .genre-grid {
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.page--panel .tile {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: 0;
+  height: 48px;
+  padding: 0 16px 0 8px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  background: var(--glass-1);
+  color: var(--ink);
+  box-shadow: none;
+  transform: none;
+}
+
+.page--panel .tile::before,
+.page--panel .tile::after {
+  display: none;
+}
+
+.page--panel .tile:hover {
+  background: var(--pink-soft);
+  transform: none;
+  box-shadow: none;
+}
+
+.page--panel .tile__icon {
+  position: static;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 8px;
+  background: linear-gradient(145deg, var(--tile-a, #ff375f), var(--tile-b, #5e5ce6));
+  opacity: 1;
+}
+
+.page--panel .tile__icon .icon {
+  width: 15px;
+  height: 15px;
+  color: #fff;
+}
+
+.page--panel .tile__name {
+  font-family: var(--font-inter);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-shadow: none;
+}
+
+.page--panel .tile__meta {
+  margin: 0 0 0 auto;
+  font-size: 12px;
+  opacity: 1;
+  color: var(--ink-2);
+}
+
+/* Baris artis 60 px seperti baris ringkas Figma */
+
+.page--panel .artist-row {
+  gap: 16px;
+  height: 76px;
+  padding: 8px 16px 8px 8px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-control);
+  background: var(--glass-1);
+}
+
+.page--panel .artist-grid {
+  gap: 12px 20px;
+}
+
+.page--panel .artist-row:hover {
+  background: var(--glass-2);
+}
+
+.page--panel .artist-row__art {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-tile);
+  box-shadow: none;
+}
+
+.page--panel .artist-row__name {
+  display: block;
+  font-family: var(--font-inter);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
+.page--panel .artist-row__meta {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.page--panel .artist-row__chev {
+  color: var(--ink-3);
+  opacity: 0.5;
+}
+
+/* Stasiun radio sebagai baris ringkas */
+/* .station__top jadi display:contents agar badge, teks, dan play sejajar. */
+
+.page--panel .station-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.page--panel .station {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 16px;
+  height: 76px;
+  min-height: 0;
+  padding: 8px 16px 8px 8px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-control);
+  background: var(--glass-1);
+  color: var(--ink);
+  box-shadow: none;
+  transform: none;
+}
+
+.page--panel .station:hover {
+  border-color: var(--border-glass-strong);
+  background: var(--glass-2);
+  transform: none;
+  box-shadow: none;
+}
+
+.page--panel .station::before {
+  display: none;
+}
+
+.page--panel .station__top {
+  display: contents;
+}
+
+.page--panel .station__badge {
+  order: 0;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  flex: none;
+  border-radius: var(--radius-tile);
+  background: linear-gradient(145deg, var(--tile-a, #fa2d48), var(--tile-b, #5e5ce6));
+  color: #fff;
+  font-size: 0;
+  letter-spacing: 0;
+  opacity: 1;
+}
+
+.page--panel .station__badge .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.page--panel .station > span:not(.station__top) {
+  order: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.page--panel .station__name {
+  margin-top: 0;
+  font-family: var(--font-inter);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page--panel .station__meta {
+  margin-top: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-2);
+  opacity: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page--panel .station__play {
+  order: 2;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  background: var(--pink-soft);
+  color: var(--ink);
+}
+
+.page--panel .station:hover .station__play {
+  background: var(--pink-tint);
+}
+
+.page--panel .station__play .icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* Detail album/artis/playlist */
+
+.page--panel .detail-hero {
+  border-radius: var(--radius-panel);
+  margin-bottom: 20px;
+}
+
+.page--panel .detail-body {
+  gap: 24px;
+}
+
+/* Empty state dan banner */
+
+.page--panel .empty {
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-panel);
+  background: var(--glass-1);
+}
+
+.page--panel .empty--inline {
+  border-radius: var(--radius-tile);
+  background: var(--glass-1);
+}
+
+.page--panel .empty__actions .btn--primary {
+  border: 1px solid var(--border-glass);
+  background: var(--pink-tint);
+  color: var(--ink);
+}
+
+.page--panel .empty__actions .btn--primary:hover {
+  background: var(--pink-soft);
+}
+
+.page--panel .info-banner {
+  border-color: var(--border-glass);
+  border-radius: var(--radius-tile);
+  background: var(--glass-1);
+  color: var(--ink-2);
+}
+
+.page--panel .info-banner .icon {
+  color: var(--ink-3);
+}
+
+.page--panel .info-banner strong {
+  color: var(--ink);
+}
+
+@media (max-width: 1120px) {
+  .page--panel .station-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .page--panel .page-head h1 {
+    font-size: 25px;
+  }
+}
+
+@media (max-width: 700px) {
+  .page--panel .page-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .page--panel .page-head h1 {
+    font-size: 23px;
+  }
+
+  .page--panel .page-head__actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .page--panel .genre-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page--panel .artist-row,
+  .page--panel .station {
+    height: 64px;
+  }
+
+  .page--panel .artist-row__art,
+  .page--panel .station__badge {
+    width: 48px;
+    height: 48px;
+  }
+
+  .page--panel .station-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
+

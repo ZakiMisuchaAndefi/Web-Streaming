@@ -1210,7 +1210,7 @@
       return {
         title: "Jelajahi",
         html:
-          '<div class="page">' +
+          '<div class="page page--panel">' +
           pageHead("Jelajahi", {
             eyebrow: "Perpustakaan",
             sub: "Temukan album, artis, dan genre dari koleksimu."
@@ -1237,7 +1237,7 @@
     return {
       title: "Jelajahi",
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         pageHead("Jelajahi", {
           eyebrow: "Perpustakaan",
           sub: plural(L.allTracks().length, "lagu") + " · " + plural(albums.length, "album") + " · " + plural(artists.length, "artis"),
@@ -1276,7 +1276,7 @@
       return {
         title: "Radio",
         html:
-          '<div class="page">' +
+          '<div class="page page--panel">' +
           pageHead("Radio", {
             eyebrow: "Stasiun tanpa henti",
             sub: "Stasiun pintar dari koleksi musikmu sendiri."
@@ -1308,7 +1308,7 @@
     return {
       title: "Radio",
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         pageHead("Radio", {
           eyebrow: "Stasiun tanpa henti",
           sub: "Stasiun pintar dari koleksi musikmu sendiri.",
@@ -1483,7 +1483,7 @@
       return {
         title: "Riwayat Pemutaran",
         html:
-          '<div class="page">' +
+          '<div class="page page--panel">' +
           pageHead("Riwayat Pemutaran", {
             eyebrow: "Perpustakaan",
             sub: "Lagu yang kamu dengarkan minimal 30 detik akan muncul di sini."
@@ -1510,7 +1510,7 @@
     return {
       title: "Riwayat Pemutaran",
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         pageHead("Riwayat Pemutaran", {
           eyebrow: "Perpustakaan",
           sub: plural(entries.length, "lagu") + " dalam riwayat · terbaru di atas",
@@ -1545,7 +1545,7 @@
     return {
       title: "Artis",
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         pageHead("Artis", {
           eyebrow: "Perpustakaan",
           sub: plural(artists.length, "artis") + " di koleksimu",
@@ -1596,7 +1596,7 @@
     return {
       title: "Album",
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         pageHead("Album", {
           eyebrow: "Perpustakaan",
           sub: plural(albums.length, "album"),
@@ -1642,7 +1642,7 @@
     return {
       title: "Lagu",
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         pageHead("Lagu", {
           eyebrow: "Perpustakaan",
           sub: plural(tracks.length, "lagu") + (tracks.length ? " · " + U.fmtLongDuration(totalDuration(tracks)) : ""),
@@ -1693,7 +1693,7 @@
     return {
       title: "Suka",
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         pageHead("Suka", {
           eyebrow: "Perpustakaan",
           sub: plural(total, "lagu") + " yang kamu tandai",
@@ -2017,7 +2017,7 @@
     return {
       title: album.name,
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         albumHero(album) +
         '<div class="detail-body">' +
         tracklist(album.tracks, {
@@ -2059,7 +2059,7 @@
     return {
       title: artist.name,
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         artistHero(artist) +
         '<div class="detail-body">' +
         trackSection("Lagu teratas", top, { type: "artist", key: artist.key }, {
@@ -2091,7 +2091,7 @@
     return {
       title: playlist.name,
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         playlistHero(playlist) +
         '<div class="detail-body">' +
         (tracks.length
@@ -2138,7 +2138,7 @@
     return {
       title: genre.name,
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         pageHead(genre.name, {
           eyebrow: "Genre",
           sub: plural(genre.count, "lagu") + " · " + U.fmtLongDuration(totalDuration(genre.tracks)),
@@ -2199,7 +2199,7 @@
     return {
       title: "Tidak ditemukan",
       html:
-        '<div class="page">' +
+        '<div class="page page--panel">' +
         emptyState({
           icon: "search",
           title: "Halaman tidak ditemukan",
