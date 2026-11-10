@@ -346,7 +346,7 @@
     const value = theme === "light" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", value);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", value === "light" ? "#ffffff" : "#1f1f1f");
+    if (meta) meta.setAttribute("content", value === "light" ? "#ffffff" : "#000000");
     if (els.themeToggle) {
       U.setIconIn(els.themeToggle, value === "light" ? "sun" : "moon");
       const label = value === "light" ? "Ganti ke tema gelap" : "Ganti ke tema terang";
@@ -3868,13 +3868,13 @@
     return (
       '<div class="settings">' +
       '<section class="settings-group"><h3 class="settings-group__title">Tampilan</h3>' +
-      '<div class="settings-row"><div class="settings-row__text"><div class="settings-row__title">Tema</div><div class="settings-row__sub">Sesuaikan warna antarmuka dengan suasana hatimu.</div></div>' +
+      '<div class="settings-row"><div class="settings-row__text"><div class="settings-row__title">Tema</div><div class="settings-row__sub">Mode gelap memakai hitam murni untuk layar AMOLED.</div></div>' +
       '<div class="settings-row__action"><div class="segmented">' +
       '<button class="segmented__btn' +
       (theme === "dark" ? " is-active" : "") +
       '" type="button" data-action="set-theme" data-theme="dark">' +
       icon("moon") +
-      "Gelap</button>" +
+      "AMOLED</button>" +
       '<button class="segmented__btn' +
       (theme === "light" ? " is-active" : "") +
       '" type="button" data-action="set-theme" data-theme="light">' +
