@@ -329,6 +329,9 @@
 
     applyTheme(L.getSetting("theme", "dark"), false);
     P.init();
+    if (AM.Lossless && typeof AM.Lossless.warm === "function") {
+      AM.Lossless.warm();
+    }
     if (AM.Youtube && typeof AM.Youtube.checkLocalResolver === "function") {
       AM.Youtube.checkLocalResolver().then((available) => {
         if (!available) {

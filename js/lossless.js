@@ -13,10 +13,11 @@
   const CACHE_TTL = 6 * 60 * 60 * 1000;
   const NEGATIVE_TTL = 60 * 1000;
   const ERROR_TTL = 30 * 1000;
-  const TIMEOUT = 8000;
+  const TIMEOUT = 10000;
 
   const cache = new Map();
   const inflight = new Map();
+  let warmed = false;
 
   function quality() {
     if (!AM.Library || typeof AM.Library.getSetting !== "function") return "high";
@@ -126,10 +127,29 @@
     inflight.clear();
   }
 
+  // Pemanasan fungsi /api/lossless di Vercel: cold start pertama bisa memakan
+  // beberapa detik. Dipanggil sekali saat aplikasi siap (hanya jika FLAC aktif)
+  // supaya pemutaran pertama tidak kehabisan waktu lalu jatuh ke YouTube.
+  function warm() {
+    if (warmed || !shouldUse()) return Promise.resolve(false);
+    warmed = true;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), TIMEOUT);
+    return fetch((window.API_BASE || "") + "/api/lossless?warm=1", {
+      signal: controller.signal,
+      cache: "no-store",
+      headers: { Accept: "application/json" }
+    })
+      .catch(() => null)
+      .then(() => true)
+      .finally(() => window.clearTimeout(timer));
+  }
+
   AM.Lossless = {
     resolve,
     shouldUse,
     clearCache,
+    warm,
     parseInfo,
     enabled: function () {
       return true;
