@@ -699,17 +699,29 @@
      Endpoint dijalankan server lokal (server.ps1) atau fungsi Vercel (api/).
      ------------------------------------------------------------------------ */
 
-  async function searchViaServer(query) {
-    const response = await fetchWithTimeout(
-      (window.API_BASE || "") + "/api/search?q=" + encodeURIComponent(query),
-      SEARCH_TIMEOUT
-    );
+  async function searchViaServer(query, cursor, page) {
+    let url =
+      (window.API_BASE || "") + "/api/search?q=" + encodeURIComponent(query);
+    if (cursor) {
+      url +=
+        "&cursor=" +
+        encodeURIComponent(cursor) +
+        "&page=" +
+        encodeURIComponent(page === "video" ? "video" : "music");
+    }
+    const response = await fetchWithTimeout(url, SEARCH_TIMEOUT);
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
     const items = data && Array.isArray(data.items) ? data.items : [];
     const alternates =
       data && Array.isArray(data.alternates) ? data.alternates : [];
-    return { items: items.slice(0, SEARCH_LIMIT), alternates };
+    return {
+      items: items.slice(0, SEARCH_LIMIT),
+      alternates,
+      continuation: data && typeof data.continuation === "string" ? data.continuation : "",
+      page: data && data.page === "video" ? "video" : "music",
+      degraded: !!(data && data.degraded)
+    };
   }
 
   /* ------------------------------------------------------------------
@@ -784,12 +796,14 @@
       .filter(Boolean);
   }
 
-  async function search(input) {
+  async function searchPage(input, cursor, page) {
     const query = String(input || "")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 80);
-    if (!query) return [];
+    if (!query) {
+      return { tracks: [], continuation: "", page: "music", degraded: false };
+    }
 
     const crash = Object.assign(
       new Error("Pencarian YouTube sedang tidak dapat diakses. Coba lagi beberapa saat lagi, atau tempel tautan video langsung."),
@@ -798,7 +812,7 @@
 
     let result;
     try {
-      result = await searchViaServer(query);
+      result = await searchViaServer(query, cursor, page);
     } catch (error) {
       if (error && error.name !== "AbortError") {
         console.warn("[youtube] pencarian InnerTube gagal:", error);
@@ -807,18 +821,34 @@
     }
 
     const mainItems = result.items;
-    if (!mainItems.length) throw crash;
+    if (!mainItems.length) {
+      // Halaman lanjutan boleh kosong (hasil habis), halaman pertama tidak.
+      if (cursor) {
+        return { tracks: [], continuation: "", page: result.page, degraded: result.degraded };
+      }
+      throw crash;
+    }
 
     const altItems = result.alternates.length ? result.alternates : mainItems;
     const list = attachCandidates(mainItems, altItems);
-    if (!list.length) throw crash;
+    if (!list.length && !cursor) throw crash;
 
     const sessionSeen = new Set();
-    return list.filter((track) => {
-      if (sessionSeen.has(track.id)) return false;
-      sessionSeen.add(track.id);
-      return true;
-    });
+    return {
+      tracks: list.filter((track) => {
+        if (sessionSeen.has(track.id)) return false;
+        sessionSeen.add(track.id);
+        return true;
+      }),
+      continuation: result.continuation,
+      page: result.page,
+      degraded: result.degraded
+    };
+  }
+
+  async function search(input) {
+    const page = await searchPage(input);
+    return page.tracks;
   }
 
   async function resolve(input, options) {
@@ -884,6 +914,7 @@
     related,
     checkLocalResolver,
     search,
+    searchPage,
     sessionTracks,
     getStreamEngine: () => streamEngine,
     getInvidiousHost: () => invidiousHost,

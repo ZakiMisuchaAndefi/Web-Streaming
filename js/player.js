@@ -37,6 +37,7 @@
     historyRecordedId: null,
     streamSource: "",
     losslessUrl: "",
+    losslessMatch: null,
     format: null
   };
 
@@ -1497,6 +1498,7 @@
     state.loadedTrackId = null;
     state.streamSource = "";
     state.losslessUrl = "";
+    state.losslessMatch = null;
     state.pendingPlay = !!autoplay;
     audio.pause();
     audio.removeAttribute("src");
@@ -1538,6 +1540,7 @@
     if (lossless && lossless.url) {
       state.streamSource = "lossless";
       state.losslessUrl = lossless.url;
+      state.losslessMatch = lossless.match || null;
       if (lossless.id) track.losslessId = lossless.id;
       track.audioVideoId = track.audioVideoId || track.sourceId;
       track.audioRetryCount = 0;
@@ -1720,6 +1723,7 @@
     state.currentTime = 0;
     state.streamSource = "";
     state.losslessUrl = "";
+    state.losslessMatch = null;
     state.pendingSeek = null;
     finishRestore();
     clearSnapshot();
@@ -1852,6 +1856,7 @@
       queueLength: state.queue.length,
       context: state.context,
       streamSource: state.streamSource,
+      losslessMatch: state.losslessMatch,
       format: state.format
     };
   }
@@ -1872,6 +1877,7 @@
     if (state.streamSource === "lossless" && track && track.provider === "youtube" && AM.Youtube) {
       state.streamSource = "youtube";
       state.losslessUrl = "";
+      state.losslessMatch = null;
       track.losslessUnavailable = true;
       const sourceId = track.audioVideoId || track.sourceId;
       const streamUrl =

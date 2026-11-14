@@ -939,6 +939,14 @@
           ["Mode diminta", STREAM_MODE_LABELS[format.requested] || (format.local ? "Berkas lokal" : "Otomatis")],
           ["Asal audio", format.local ? "Berkas lokal" : format.losslessSource ? "FLAC lossless (" + format.losslessSource + ")" : track.providerLabel || "YouTube"]
         ];
+        if (format.losslessSource && s.losslessMatch && s.losslessMatch.title) {
+          formatRows.push([
+            "Versi katalog",
+            s.losslessMatch.title +
+              (s.losslessMatch.artist ? " — " + s.losslessMatch.artist : "") +
+              (s.losslessMatch.duration ? " (" + U.fmtTime(s.losslessMatch.duration) + ")" : "")
+          ]);
+        }
         if (fallback) {
           formatRows.push([
             "Catatan",
@@ -2299,6 +2307,11 @@
         return useOnlineSearch(actionEl.dataset.query || "");
       case "search-online-retry":
         return retrySearchOnline(actionEl.dataset.query || "");
+      case "search-load-more":
+        if (AM.Online && typeof AM.Online.loadMore === "function") {
+          return AM.Online.loadMore();
+        }
+        return;
       case "online-queue":
         return queueOnlineTrack(actionEl.dataset.id);
       case "online-menu":

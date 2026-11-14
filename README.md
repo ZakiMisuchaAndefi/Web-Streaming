@@ -69,7 +69,7 @@ Repo ini juga siap di-deploy ke **Vercel** tanpa build step:
 | Endpoint | Fungsi |
 | --- | --- |
 | `GET /api/health` | Status resolver `innertube`, `ffmpeg`, `mp3`, unduhan, serta `engine` audio (`proxy`, `invidious`, atau `iframe`). |
-| `GET /api/search?q=KATA` | Hasil pencarian YouTube lewat InnerTube (dipakai halaman Pencarian dan Beranda). |
+| `GET /api/search?q=KATA` | Hasil pencarian YouTube lewat InnerTube (dipakai halaman Pencarian dan Beranda). Tambahkan `cursor` + `page` dari respons sebelumnya untuk mengambil halaman berikutnya (`Muat lebih banyak`). |
 | `GET /api/resolve?id=VIDEO_ID&quality=high` | URL audio langsung dari YouTube (di-cache per video + kualitas); `force=1` mengambil URL baru untuk percobaan ulang. Dipakai saat aplikasi berjalan lokal. |
 | `GET /api/stream?id=VIDEO_ID&quality=high` | Menyajikan audio lewat byte-range agar player aplikasi bisa memutar dan seek; `force=1` mengambil URL baru saat mencoba ulang. Dipakai saat aplikasi berjalan lokal. |
 | `GET /api/lossless?title=...&artist=...&duration=...` | Mencari versi FLAC di katalog **Tracks** (monochrome.st) dan mengembalikan URL audio + detail format (sample rate, kanal, bit depth, bitrate). `404` berarti lagu tidak tersedia dalam FLAC. |
@@ -115,7 +115,8 @@ Kotak pencarian — tombol **Cari** di sidebar, ikon cari di bilah atas, atau pi
 - Setelah berhenti mengetik ±0,4 detik (minimal 2 huruf), aplikasi otomatis mencari di YouTube dan menampilkan bagian **Dari YouTube**. Lagu di sana bisa langsung diputar, disukai lewat ikon hati, dibuka menunya (`⋯`), atau diunduh.
 - Tekan **Enter** untuk memutar hasil teratas. Jika perpustakaan tidak punya lagu yang cocok, Enter memutar hasil YouTube.
 - Kalau yang kamu cari adalah **judul lagu** lalu memutar salah satu hasilnya, antrean dimulai dari lagu itu dan langsung diisi radio YouTube — bukan daftar unggahan lain yang judulnya sama. Kalau yang kamu cari adalah **nama artis**, hasil pencarian tetap menjadi antrean seperti biasa.
-- Hasil YouTube tampil langsung di halaman ini; tidak ada halaman **Musik Online** terpisah.
+- Hasil YouTube tampil langsung di halaman ini — semua hasil yang sudah dimuat ikut ditampilkan, bukan hanya 10 teratas.
+- Tombol **Muat lebih banyak** mengambil halaman berikutnya dari YouTube (InnerTube continuation), jadi hasil pencarian tidak dibatasi 20–30 lagu dan bisa terus ditambah selama masih tersedia.
 - Kalau pencarian YouTube gagal, muncul tombol **Coba lagi**; hasil perpustakaan tetap tampil seperti biasa.
 - Antrean dari hasil pencarian ini diberi label **Cari · YouTube** di panel antrean.
 
@@ -137,7 +138,7 @@ Tidak perlu API key, akun, atau impor file. Cukup buka **Pencarian** dan ketik k
 
 Catatan:
 
-- Pencarian memakai **InnerTube**, API internal YouTube yang juga dipakai situs YouTube, lewat `/api/search` (hasil disimpan sementara 5 menit). Tidak perlu API key resmi. Jika pencarian gagal, coba lagi beberapa saat atau tempel tautan video langsung.
+- Pencarian memakai **InnerTube**, API internal YouTube yang juga dipakai situs YouTube, lewat `/api/search` (hasil disimpan sementara 5 menit). Tidak perlu API key resmi. Halaman berikutnya diambil lewat token continuation, jadi daftar hasil bisa ditambah tanpa batas selama YouTube masih menyediakannya. Jika pencarian gagal, coba lagi beberapa saat atau tempel tautan video langsung.
 - Video yang tidak mengizinkan pemutaran di luar YouTube tetap bisa diputar, karena audio diambil langsung (bukan lewat pemutar embed). Jika satu format gagal, aplikasi mencoba format lain, lalu pemutar resmi YouTube untuk lagu itu, lalu hasil alternatif untuk lagu yang sama.
 - Di Vercel, YouTube memblokir pengambilan audio dari IP datacenter. Karena itu aplikasi memakai **instance Invidious** sebagai sumber audio: server hanya memeriksa instance mana yang hidup lewat `/api/health`, lalu browser memutar audionya langsung. Di localhost resolver server tetap dipakai. Keduanya bebas iklan.
 - Radio otomatis butuh `InnerTube resolver` dan koneksi internet; hasilnya disimpan sementara agar tidak berulang kali mengambil daftar yang sama. Kandidat disaring: judul sama/mirip dengan lagu acuan dibuang, duplikat unggahan dirapikan, durasi wajib 1–10 menit, maksimal 2 lagu per artis dalam 10 lagu, dan artis yang sama tidak muncul dua kali berturut-turut. Cover, karaoke, dan remix dilewati kecuali lagu acuannya memang cover/remix.
@@ -164,7 +165,7 @@ Catatan:
 
 - **Pengaturan → Audio → Format streaming** memilih format audio yang diambil resolver: **Hemat** (OPUS 70 kbps), **Standar** (OPUS 160 kbps), **Tinggi** (AAC/OPUS hingga 256 kbps sesuai sumber), atau **FLAC**.
 - **FLAC** mencari versi lossless di katalog **Tracks** (`tracks.monochrome.st`, API yang dipakai Monochrome Music) lewat `/api/lossless`. Jika lagunya tersedia, audio FLAC diputar langsung dari katalog; sample rate, kanal, bit depth, dan bitrate dibaca dari header FLAC. Jika tidak tersedia (atau katalog sedang mati), aplikasi otomatis kembali ke audio YouTube terbaik dan chip menampilkan `FLAC → OPUS` sebagai penanda fallback.
-- Pencarian FLAC mencocokkan judul, artis, dan durasi, serta menolak versi live/acoustic/remix/karaoke bila lagu aslinya bukan versi itu. Instance katalog bisa diganti lewat env `LOSSLESS_API` saat deploy Vercel.
+- Pencarian FLAC mencocokkan judul, artis, dan durasi (toleransi ±15 detik untuk intro/outro video musik), serta menolak versi live/acoustic/remix/karaoke/cover bila lagu aslinya bukan versi itu. Judul mentah video ikut dibaca supaya versi di dalam tanda kurung tidak lolos. Bila tidak yakin, aplikasi memilih fallback ke YouTube daripada memutar lagu yang salah. Instance katalog bisa diganti lewat env `LOSSLESS_API` saat deploy Vercel.
 - Pemutar selalu menampilkan chip format yang benar-benar mengalir, mis. `OPUS · 48 kHz` atau `FLAC · 44,1 kHz`. Untuk berkas lokal, sample rate, kanal, dan bit depth dibaca langsung dari header FLAC/WAV/AIFF/MP3/OGG sehingga angkanya akurat.
 - **Klik chip format** di pil pemutar atau Now Playing untuk membuka panel **Stats for nerds**: codec, wadah/MIME, bitrate, sample rate, kanal, bit depth, itag, mode yang diminta, mesin pemutaran, status, buffer, volume, dan catatan fallback. Data perangkat keluaran/resampling ditandai sebagai dikelola browser/OS karena tidak dapat dibaca aplikasi.
 - Aktifkan **Stats for nerds** di Pengaturan untuk menambahkan satu baris detail kecil di bawah judul Now Playing (bitrate, sample rate, kanal, bit depth, itag).

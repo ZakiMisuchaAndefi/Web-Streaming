@@ -1845,7 +1845,9 @@
       active,
       status: active ? snapshot.status : "idle",
       results: active && Array.isArray(snapshot.results) ? snapshot.results : [],
-      error: active ? snapshot.error || "" : ""
+      error: active ? snapshot.error || "" : "",
+      hasMore: active && !!snapshot.hasMore,
+      loadingMore: active && !!snapshot.loadingMore
     };
   }
 
@@ -1888,9 +1890,18 @@
     }
 
     const total = online.results.length;
+    const more = online.hasMore
+      ? '<div class="search-more">' +
+        '<button class="btn btn--secondary btn--small" type="button" data-action="search-load-more"' +
+        (online.loadingMore ? " disabled" : "") +
+        ">" +
+        (online.loadingMore ? '<span class="spinner"></span>Memuat…' : "Muat lebih banyak") +
+        "</button>" +
+        "</div>"
+      : "";
     return section(
       "Dari YouTube",
-      onlineTracklist(online.results.slice(0, 10), {
+      onlineTracklist(online.results, {
         queue: {
           type: "online",
           provider: "youtube",
@@ -1898,7 +1909,7 @@
           label: "Cari · YouTube"
         },
         query: value
-      }),
+      }) + more,
       {
         sub: plural(total, "lagu") + " · streaming penuh"
       }

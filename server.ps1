@@ -346,10 +346,15 @@ function Invoke-InnertubeCli([string[]]$CliArgs, [int]$TimeoutMs, [string]$CliPa
   }
 }
 
-function Invoke-InnerTubeSearch($query) {
+function Invoke-InnerTubeSearch($query, $cursor, $page) {
   # Memakai resolver Node yang sama dengan fungsi /api/search di Vercel,
   # sehingga hasil lokal (lagu YouTube Music) identik dengan produksi.
-  $result = Invoke-InnertubeCli @("search", $query) 20000
+  if ($cursor) {
+    $cliArgs = @("more", [string]$cursor, [string]$page)
+  } else {
+    $cliArgs = @("search", $query)
+  }
+  $result = Invoke-InnertubeCli $cliArgs 20000
   if ($result.Status -ne 200) {
     throw "Pencarian InnerTube gagal: $($result.Error)"
   }
@@ -357,6 +362,9 @@ function Invoke-InnerTubeSearch($query) {
   return @{
     items = @($payload.items)
     alternates = @($payload.alternates)
+    continuation = [string]$payload.continuation
+    page = [string]$payload.page
+    degraded = [bool]$payload.degraded
   }
 }
 
@@ -706,22 +714,37 @@ try {
         Send-Json $stream 200 "OK" @{ INNER_TUBE = $available; ffmpeg = $hasFfmpeg; mp3 = ($available -and $hasFfmpeg); downloads = $available; engine = "proxy" } $headOnly
       } elseif ($path -eq "/api/search" -and ($method -eq "GET" -or $headOnly)) {
         $query = Get-QueryValue $rawQuery "q"
-        if ([string]::IsNullOrWhiteSpace($query)) {
+        $cursor = Get-QueryValue $rawQuery "cursor"
+        if ($cursor) { $cursor = $cursor.Trim() } else { $cursor = "" }
+        $page = Get-QueryValue $rawQuery "page"
+        if ($page -ne "video") { $page = "music" }
+        if ([string]::IsNullOrWhiteSpace($query) -and -not $cursor) {
           Send-Json $stream 400 "Bad Request" @{ error = "Kata kunci pencarian kosong" } $headOnly
         } else {
           $query = $query.Trim()
           if ($query.Length -gt 80) { $query = $query.Substring(0, 80) }
-          $cacheKey = $query.ToLowerInvariant()
+          if ($cursor) {
+            $cacheKey = ("more|" + $page + "|" + $cursor).ToLowerInvariant()
+          } else {
+            $cacheKey = $query.ToLowerInvariant()
+          }
           $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           $cached = $script:searchCache[$cacheKey]
           if ($cached -and [int64]$cached.Expires -gt $now) {
             Send-Json $stream 200 "OK" $cached.Payload $headOnly
           } else {
             try {
-              $result = Invoke-InnerTubeSearch $query
-              $payload = @{ items = $result.items; alternates = $result.alternates }
+              $result = Invoke-InnerTubeSearch $query $cursor $page
+              $payload = @{
+                items = $result.items
+                alternates = $result.alternates
+                continuation = $result.continuation
+                page = $result.page
+                degraded = [bool]$result.degraded
+              }
+              $ttl = if ($result.degraded) { 30 } else { 300 }
               if ($script:searchCache.Count -gt 100) { $script:searchCache.Clear() }
-              $script:searchCache[$cacheKey] = @{ Payload = $payload; Expires = ($now + 300) }
+              $script:searchCache[$cacheKey] = @{ Payload = $payload; Expires = ($now + $ttl) }
               Send-Json $stream 200 "OK" $payload $headOnly
             } catch {
               Send-Json $stream 502 "Bad Gateway" @{ error = $_.Exception.Message } $headOnly
@@ -789,8 +812,10 @@ try {
           if ($duration) { $duration = $duration.Trim() } else { $duration = "0" }
           $isrc = Get-QueryValue $rawQuery "isrc"
           if ($isrc) { $isrc = $isrc.Trim() } else { $isrc = "" }
+          $rawTitle = Get-QueryValue $rawQuery "rawTitle"
+          if ($rawTitle) { $rawTitle = $rawTitle.Trim() } else { $rawTitle = "" }
 
-          $cacheKey = ($title + "|" + $artist + "|" + $duration).ToLowerInvariant()
+          $cacheKey = ($title + "|" + $artist + "|" + $duration + "|" + $rawTitle).ToLowerInvariant()
           $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           $cached = $script:losslessCache[$cacheKey]
           if ($cached -and [int64]$cached.Expires -gt $now) {
@@ -800,7 +825,7 @@ try {
               Send-Json $stream 404 "Not Found" @{ error = "Tidak ada versi lossless untuk lagu ini." } $false
             }
           } else {
-            $payload = @{ title = $title; artist = $artist; duration = $duration; isrc = $isrc } | ConvertTo-Json -Compress
+            $payload = @{ title = $title; artist = $artist; duration = $duration; isrc = $isrc; rawTitle = $rawTitle } | ConvertTo-Json -Compress
             $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($payload))
             $result = Invoke-InnertubeCli @("resolve", $encoded) 20000 $script:LosslessPath
             if ($result.Status -eq 200) {
@@ -812,7 +837,7 @@ try {
               # Tidak ada versi FLAC: simpan hasil negatif sebentar agar tidak
               # mencari ulang setiap kali lagu yang sama diputar.
               if ($script:losslessCache.Count -gt 200) { $script:losslessCache.Clear() }
-              $script:losslessCache[$cacheKey] = @{ Payload = $null; Expires = ($now + 600) }
+              $script:losslessCache[$cacheKey] = @{ Payload = $null; Expires = ($now + 60) }
               Send-Json $stream 404 "Not Found" @{ error = "Tidak ada versi lossless untuk lagu ini." } $false
             } elseif ($result.Status -eq 504) {
               Send-Json $stream 504 "Gateway Timeout" @{ error = "Pencarian lossless melebihi batas waktu." } $false

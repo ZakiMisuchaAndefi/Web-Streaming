@@ -15,7 +15,9 @@ const BASE = String(process.env.LOSSLESS_API || DEFAULT_BASE).replace(/\/+$/, ""
 const SEARCH_TIMEOUT = 8000;
 const PROBE_TIMEOUT = 8000;
 const CACHE_TTL = 24 * 60 * 60 * 1000;
-const NEGATIVE_TTL = 10 * 60 * 1000;
+// Cache negatif dibuat pendek: kegagalan sementara (katalog lambat/rate limit)
+// tidak boleh membuat lagu yang sebenarnya ada ikut gagal selama berjam-jam.
+const NEGATIVE_TTL = 60 * 1000;
 const MAX_CACHE = 300;
 
 const cache = new Map();
@@ -37,8 +39,19 @@ const VERSION_WORDS = new Set([
   "orchestral",
   "piano",
   "8d",
-  "extended"
+  "extended",
+  "reverb",
+  "lofi",
+  "spedup",
+  "speedup",
+  "acapella",
+  "duet"
 ]);
+
+// Batas selisih durasi. Video musik resmi sering punya intro/outro beberapa
+// detik lebih panjang, jadi toleransi dibuat longgar. Versi live/extended
+// biasanya berbeda puluhan detik dan tetap ditolak.
+const MAX_DURATION_DIFF = 15;
 
 function slug(value) {
   return String(value || "")
@@ -52,15 +65,45 @@ function slug(value) {
     .trim();
 }
 
-function words(value) {
-  return slug(value).split(" ").filter(Boolean);
+// Judul untuk perbandingan: "Remastered" tidak mengubah rekaman, jadi
+// diabaikan agar "Judul (Remastered 2025)" tetap cocok dengan "Judul".
+function titleKey(value) {
+  return slug(value)
+    .replace(/\b(remaster|remastered)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function extraVersion(candidateTitle, targetTitle) {
-  const targetWords = new Set(words(targetTitle));
-  return words(candidateTitle).filter(
-    (word) => VERSION_WORDS.has(word) && !targetWords.has(word)
-  ).length;
+// Kata mentah yang masih mempertahankan isi tanda kurung. Versi seperti
+// "Nina (Remix)" harus terdeteksi, sedangkan slug() membuang isi kurung.
+function rawWords(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter(Boolean);
+}
+
+function versionKey(word) {
+  if (VERSION_WORDS.has(word)) return word;
+  if (word.endsWith("s")) {
+    const singular = word.slice(0, -1);
+    if (VERSION_WORDS.has(singular)) return singular;
+  }
+  return "";
+}
+
+function versionWords() {
+  const set = new Set();
+  for (let i = 0; i < arguments.length; i += 1) {
+    for (const word of rawWords(arguments[i])) {
+      const key = versionKey(word);
+      if (key) set.add(key);
+    }
+  }
+  return set;
 }
 
 function isrcOf(value) {
@@ -109,38 +152,45 @@ function scoreCandidate(candidate, target) {
   const candidateIsrc = isrcOf(candidate.isrc);
   if (targetIsrc && candidateIsrc && targetIsrc === candidateIsrc) return 400;
 
-  const targetTitle = slug(target.title);
-  const candidateTitle = slug(candidate.title);
-  if (!targetTitle || !candidateTitle) return -Infinity;
-
-  let score = 0;
-  if (targetTitle === candidateTitle) score += 100;
-  else if (
-    candidateTitle.startsWith(targetTitle + " ") ||
-    targetTitle.startsWith(candidateTitle + " ")
-  ) {
-    score += 60;
-  } else {
+  const targetTitle = titleKey(target.title);
+  const candidateTitle = titleKey(candidate.title);
+  if (!targetTitle || !candidateTitle || targetTitle !== candidateTitle) {
     return -Infinity;
   }
 
-  if (artistMatches(candidate, target.artist)) score += 50;
+  let score = 100;
 
+  // Artis harus cocok bila diketahui. Judul yang sama dengan artis berbeda
+  // hampir pasti lagu/cover yang berbeda.
+  const artistOk = artistMatches(candidate, target.artist);
+  if (slug(target.artist)) {
+    if (!artistOk) return -Infinity;
+    score += 50;
+  }
+
+  // Selisih durasi besar berarti rekaman/versi yang berbeda. Lebih baik
+  // fallback ke YouTube daripada memutar lagu yang salah.
   const targetDuration = targetSeconds(target.duration);
   const candidateDuration = candidateSeconds(candidate.duration);
   if (targetDuration > 0 && candidateDuration > 0) {
     const diff = Math.abs(targetDuration - candidateDuration);
+    if (diff > MAX_DURATION_DIFF) return -Infinity;
     if (diff <= 2) score += 30;
     else if (diff <= 5) score += 20;
-    else if (diff <= 10) score += 5;
-    else score -= 30;
+    else score += 5;
   }
 
-  // Jangan pilih versi live/acoustic/remix/karaoke bila lagunya bukan versi itu.
-  score -= extraVersion(candidate.title, target.title) * 200;
-
-  // Judul sama tapi artis tidak cocok = kemungkinan cover/versi lain.
-  if (slug(target.artist) && !artistMatches(candidate, target.artist)) score -= 50;
+  // Versi harus sama: video live hanya boleh dipasangkan dengan berkas live,
+  // video remix dengan remix, dan seterusnya. Kata versi dibaca dari judul
+  // mentah karena sering berada di dalam tanda kurung.
+  const targetVersions = versionWords(target.title, target.rawTitle);
+  const candidateVersions = versionWords(candidate.title);
+  for (const version of candidateVersions) {
+    if (!targetVersions.has(version)) return -Infinity;
+  }
+  for (const version of targetVersions) {
+    if (!candidateVersions.has(version)) return -Infinity;
+  }
 
   return score;
 }
@@ -266,7 +316,10 @@ function cacheKey(query) {
     slug(query.title),
     slug(query.artist),
     targetSeconds(query.duration),
-    isrcOf(query.isrc)
+    isrcOf(query.isrc),
+    versionWords(query.rawTitle).size
+      ? Array.from(versionWords(query.rawTitle)).sort().join("+")
+      : ""
   ].join("|");
 }
 
@@ -278,6 +331,22 @@ function putCache(key, value, ttl) {
   cache.set(key, { value, expires: Date.now() + ttl });
 }
 
+// Katalog lebih mudah menemukan lagu dengan satu artis utama dan judul tanpa
+// keterangan dalam kurung ("(Remastered 2025)", "(Live)", dsb.).
+function searchArtist(value) {
+  return String(value || "")
+    .replace(/\b(feat|featuring|ft)\.?\s+.*$/i, " ")
+    .split(/\s*(?:,|&|\+|\bx\b|\bvs\b|\bversus\b)\s*/i)[0]
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function searchQueryFor(target) {
+  const artist = searchArtist(target.artist);
+  const title = titleKey(target.title);
+  return [artist, title].filter(Boolean).join(" ").slice(0, 140);
+}
+
 async function resolve(query) {
   const title = String((query && query.title) || "").trim().slice(0, 120);
   if (!title) return null;
@@ -285,20 +354,29 @@ async function resolve(query) {
     title,
     artist: String((query && query.artist) || "").trim().slice(0, 120),
     duration: targetSeconds(query && query.duration),
-    isrc: isrcOf(query && query.isrc)
+    isrc: isrcOf(query && query.isrc),
+    // Judul asli video (dengan tanda kurung) untuk mendeteksi versi live/remix.
+    rawTitle: String((query && query.rawTitle) || "").trim().slice(0, 240)
   };
 
   const key = cacheKey(target);
   const hit = cache.get(key);
   if (hit && hit.expires > Date.now()) return hit.value;
 
-  const searchQuery = [target.artist, target.title].filter(Boolean).join(" ").slice(0, 140);
+  const searchQuery = searchQueryFor(target);
+  const rawQuery = [target.artist, target.title].filter(Boolean).join(" ").slice(0, 140);
+  const attempts = [searchQuery];
+  if (rawQuery && rawQuery !== searchQuery) attempts.push(rawQuery);
+
   let candidates = [];
-  try {
-    candidates = await search(searchQuery);
-  } catch (error) {
-    putCache(key, null, NEGATIVE_TTL);
-    throw error;
+  for (const attempt of attempts) {
+    try {
+      candidates = await search(attempt);
+    } catch (error) {
+      // Jangan simpan cache negatif untuk gangguan jaringan.
+      throw error;
+    }
+    if (candidates.length) break;
   }
 
   let best = null;
@@ -330,7 +408,7 @@ async function resolve(query) {
     requested: "flac",
     match: {
       title: best.title || "",
-      artist: artistNames(best)[0] || "",
+      artist: artistNames(best).filter(Boolean).join(", "),
       duration: candidateSeconds(best.duration),
       isrc: best.isrc || ""
     },

@@ -226,6 +226,40 @@ function itemsFrom(data, limit) {
   return list;
 }
 
+// Token halaman berikutnya disimpan di struktur yang berbeda-beda
+// (continuationCommand untuk pencarian video, nextContinuationData untuk
+// YouTube Music). Ambil token pertama yang ditemukan.
+function findContinuation(node, depth) {
+  if (!node || typeof node !== "object" || depth > 40) return "";
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const token = findContinuation(item, depth + 1);
+      if (token) return token;
+    }
+    return "";
+  }
+  const command = node.continuationCommand && node.continuationCommand.token;
+  if (command) return String(command);
+  const next = node.nextContinuationData && node.nextContinuationData.continuation;
+  if (next) return String(next);
+  const reload =
+    node.reloadContinuationData && node.reloadContinuationData.continuation;
+  if (reload) return String(reload);
+
+  for (const key of Object.keys(node)) {
+    if (
+      key === "continuationCommand" ||
+      key === "nextContinuationData" ||
+      key === "reloadContinuationData"
+    ) {
+      continue;
+    }
+    const token = findContinuation(node[key], depth + 1);
+    if (token) return token;
+  }
+  return "";
+}
+
 function findMusicVideoId(renderer) {
   const overlay =
     renderer &&
@@ -328,48 +362,131 @@ function musicItemsFrom(data, limit) {
    Pencarian
    -------------------------------------------------------------------------- */
 
-async function searchVideoOnce(query, params, limit) {
-  const body = { query };
-  if (params) body.params = params;
+async function searchVideoResult(query, params, limit, continuation) {
+  const body = continuation ? { continuation } : { query };
+  if (!continuation && params) body.params = params;
   const data = await post("search", body, "web");
-  return itemsFrom(data, limit);
+  return {
+    items: itemsFrom(data, limit),
+    continuation: findContinuation(data, 0)
+  };
+}
+
+async function searchVideoOnce(query, params, limit) {
+  const result = await searchVideoResult(query, params, limit);
+  return result.items;
+}
+
+async function searchMusicResult(query, limit, continuation) {
+  const body = continuation ? { continuation } : { query, params: MUSIC_SONGS_PARAMS };
+  const data = await post("search", body, "music");
+  return {
+    items: musicItemsFrom(data, limit),
+    continuation: findContinuation(data, 0)
+  };
 }
 
 async function searchMusicOnce(query, limit) {
-  const data = await post(
-    "search",
-    { query, params: MUSIC_SONGS_PARAMS },
-    "music"
-  );
-  return musicItemsFrom(data, limit);
+  const result = await searchMusicResult(query, limit);
+  return result.items;
+}
+
+// Jaringan ke YouTube sesekali gagal sesaat (fetch failed). Coba lagi sebelum
+// menyerah, karena bila pencarian musik gagal hasil video biasa yang dipakai
+// dan metadata lagunya jadi tidak rapi.
+async function searchMusicWithRetry(query, limit, attempts) {
+  const total = Math.max(1, Number(attempts) || 2);
+  let lastError = null;
+  for (let i = 0; i < total; i += 1) {
+    try {
+      const result = await searchMusicResult(query, limit);
+      if (result.items.length) return result;
+    } catch (error) {
+      lastError = error;
+    }
+    if (i < total - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  if (lastError) throw lastError;
+  return { items: [], continuation: "" };
+}
+
+// Halaman berikutnya. Token terikat ke klien pembuatnya, jadi "page"
+// menentukan klien yang dipakai (music untuk hasil lagu, video untuk
+// pencarian video biasa).
+async function searchMore(token, options) {
+  const opts = options || {};
+  const cursor = String(token || "").trim();
+  if (!cursor) return { items: [], continuation: "" };
+  const limit = Math.min(Math.max(Number(opts.limit) || 40, 1), 50);
+  const page = opts.page === "video" ? "video" : "music";
+
+  if (page === "video") {
+    const result = await searchVideoResult("", "", limit, cursor);
+    return { items: result.items, continuation: result.continuation, page: "video" };
+  }
+
+  try {
+    const result = await searchMusicResult("", limit, cursor);
+    if (result.items.length) {
+      return { items: result.items, continuation: result.continuation, page: "music" };
+    }
+  } catch (error) {
+    /* Token musik bisa kedaluwarsa; coba klien video di bawah. */
+  }
+  const fallback = await searchVideoResult("", "", limit, cursor);
+  return { items: fallback.items, continuation: fallback.continuation, page: "video" };
 }
 
 async function search(query, options) {
   const opts = options || {};
   const limit = Math.min(Math.max(Number(opts.limit) || 40, 1), 50);
   const text = String(query || "").replace(/\s+/g, " ").trim().slice(0, 80);
-  if (!text) return { items: [], alternates: [] };
+  if (!text) {
+    return { items: [], alternates: [], continuation: "", page: "music", degraded: false };
+  }
 
   // Utama: katalog lagu YouTube Music (bersih, audio-only/Topic).
   // Alternatif: pencarian video biasa untuk kandidat cadangan.
   const results = await Promise.allSettled([
-    searchMusicOnce(text, limit),
-    searchVideoOnce(text, VIDEO_PARAMS, limit)
+    searchMusicWithRetry(text, limit, 2),
+    searchVideoResult(text, VIDEO_PARAMS, limit)
   ]);
 
-  const musicItems = results[0].status === "fulfilled" ? results[0].value : [];
-  const videoItems = results[1].status === "fulfilled" ? results[1].value : [];
+  const music =
+    results[0].status === "fulfilled"
+      ? results[0].value
+      : { items: [], continuation: "" };
+  const video =
+    results[1].status === "fulfilled"
+      ? results[1].value
+      : { items: [], continuation: "" };
 
-  let items = musicItems;
+  let items = music.items;
+  let continuation = music.continuation;
+  let page = "music";
+  let degraded = music.items.length === 0;
+
   if (!items.length) {
     // Cadangan: hasil video biasa bila katalog musik kosong/gagal.
-    try {
-      items = await searchVideoOnce(text, "", limit);
-    } catch (error) {
-      items = [];
+    page = "video";
+    if (video.items.length) {
+      items = video.items;
+      continuation = video.continuation;
+    } else {
+      try {
+        const fallback = await searchVideoResult(text, "", limit);
+        items = fallback.items;
+        continuation = fallback.continuation;
+      } catch (error) {
+        items = [];
+        continuation = "";
+      }
     }
   }
-  const alternates = videoItems.length ? videoItems : items;
+
+  const alternates = video.items.length ? video.items : items;
 
   if (!items.length) {
     const reason = [results[0], results[1]]
@@ -379,7 +496,7 @@ async function search(query, options) {
     throw reason || new Error("Pencarian InnerTube tidak mengembalikan hasil");
   }
 
-  return { items, alternates };
+  return { items, alternates, continuation, page, degraded };
 }
 
-module.exports = { search, searchMusic: searchMusicOnce, searchVideo: searchVideoOnce };
+module.exports = { search, searchMore, searchMusic: searchMusicOnce, searchVideo: searchVideoOnce };

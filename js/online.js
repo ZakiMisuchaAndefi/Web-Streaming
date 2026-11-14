@@ -23,6 +23,11 @@
     errorKind: "",
     results: [],
     resultKey: "",
+    continuation: "",
+    page: "music",
+    hasMore: false,
+    loadingMore: false,
+    degraded: false,
     lastUpdated: 0,
     token: 0,
     audioPrefetchToken: 0,
@@ -207,12 +212,16 @@
     return nowLiked;
   }
 
-  function rememberResultSet(provider, query, list) {
+  function rememberResultSet(provider, query, list, meta) {
     const key = keyFor(provider, query);
+    const info = meta || {};
     resultSets.set(key, {
       provider: normalizeProvider(provider),
       query: cleanQuery(query),
       ids: (list || []).map((track) => track.id),
+      continuation: info.continuation || "",
+      page: info.page === "video" ? "video" : "music",
+      degraded: !!info.degraded,
       at: Date.now()
     });
     if (resultSets.size > 40) {
@@ -246,23 +255,42 @@
           { youtubeHint: true }
         );
       }
-      return AM.Youtube.sessionTracks();
+      return {
+        tracks: AM.Youtube.sessionTracks(),
+        continuation: "",
+        page: "music",
+        degraded: false
+      };
     }
     // Kata kunci → cari lagu di YouTube.
-    return AM.Youtube.search(query);
+    if (typeof AM.Youtube.searchPage === "function") {
+      return AM.Youtube.searchPage(query);
+    }
+    return {
+      tracks: await AM.Youtube.search(query),
+      continuation: "",
+      page: "music",
+      degraded: false
+    };
   }
 
-  function applyResultSet(provider, query, list, mode) {
+  function applyResultSet(provider, query, list, mode, meta) {
+    const info = meta || {};
     state.provider = normalizeProvider(provider);
     state.query = cleanQuery(query);
     state.mode = mode || (state.query ? "search" : "intro");
     state.results = list.slice();
+    state.continuation = info.continuation || "";
+    state.page = info.page === "video" ? "video" : "music";
+    state.degraded = !!info.degraded;
+    state.hasMore = !!state.continuation;
+    state.loadingMore = false;
     prefetchFirstTrack(state.results);
     state.lastUpdated = Date.now();
     state.error = "";
     state.errorKind = "";
     state.status = "ready";
-    rememberResultSet(state.provider, state.query, list);
+    rememberResultSet(state.provider, state.query, list, info);
     return snapshot();
   }
 
@@ -354,6 +382,9 @@
       state.errorKind = "";
       state.lastUpdated = Date.now();
       state.results = [];
+      state.continuation = "";
+      state.hasMore = false;
+      state.loadingMore = false;
       rememberResultSet(nextProvider, nextQuery, []);
       const value = snapshot();
       emit("change", value);
@@ -369,7 +400,8 @@
         nextProvider,
         nextQuery,
         cached.tracks,
-        nextQuery ? "search" : "trending"
+        nextQuery ? "search" : "trending",
+        cached
       );
       emit("change", value);
       return Promise.resolve(value);
@@ -383,6 +415,9 @@
     state.error = "";
     state.errorKind = "";
     state.results = [];
+    state.continuation = "";
+    state.hasMore = false;
+    state.loadingMore = false;
     state.lastUpdated = 0;
     emit("change", snapshot());
 
@@ -400,7 +435,15 @@
 
     const promise = (async function run() {
       try {
-        const list = await fetchYouTube(nextQuery, controller.signal);
+        const page = await fetchYouTube(nextQuery, controller.signal);
+        const list = Array.isArray(page) ? page : page.tracks || [];
+        const meta = Array.isArray(page)
+          ? { continuation: "", page: "music", degraded: false }
+          : {
+              continuation: page.continuation || "",
+              page: page.page === "video" ? "video" : "music",
+              degraded: !!page.degraded
+            };
 
         if (token !== state.token) return snapshot();
 
@@ -409,10 +452,21 @@
         state.errorKind = "";
         state.lastUpdated = Date.now();
         state.results = list;
+        state.continuation = meta.continuation;
+        state.page = meta.page;
+        state.degraded = meta.degraded;
+        state.hasMore = !!meta.continuation;
+        state.loadingMore = false;
         prefetchFirstTrack(list);
-        rememberResultSet(nextProvider, nextQuery, list);
+        rememberResultSet(nextProvider, nextQuery, list, meta);
         if (cacheable) {
-          cache.set(key, { at: Date.now(), tracks: list.slice() });
+          cache.set(key, {
+            at: Date.now(),
+            tracks: list.slice(),
+            continuation: meta.continuation,
+            page: meta.page,
+            degraded: meta.degraded
+          });
         }
 
         const value = snapshot();
@@ -467,6 +521,88 @@
     return prepare(state.provider, state.query, { force: true });
   }
 
+  // Ambil halaman berikutnya dari YouTube tanpa mengganti hasil yang sudah ada.
+  function loadMore() {
+    if (!state.hasMore || state.loadingMore || !state.continuation) {
+      return Promise.resolve(snapshot());
+    }
+    if (state.status !== "ready" || !AM.Youtube || typeof AM.Youtube.searchPage !== "function") {
+      return Promise.resolve(snapshot());
+    }
+
+    const token = state.token;
+    const query = state.query;
+    const cursor = state.continuation;
+    const page = state.page;
+    const cacheable = !isLinkInput(query);
+    const key = keyFor(state.provider, query);
+
+    state.loadingMore = true;
+    emit("change", snapshot());
+
+    let timedOut = false;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      try {
+        controller.abort();
+      } catch (error) {
+        /* Abaikan. */
+      }
+    }, REQUEST_TIMEOUT);
+
+    return AM.Youtube.searchPage(query, cursor, page)
+      .then((result) => {
+        if (token !== state.token) return snapshot();
+        const list = result && Array.isArray(result.tracks) ? result.tracks : [];
+        const seen = new Set(state.results.map((track) => track.id));
+        const added = list.filter((track) => {
+          if (!track || seen.has(track.id)) return false;
+          seen.add(track.id);
+          return true;
+        });
+
+        state.results = state.results.concat(added);
+        state.continuation = result.continuation || "";
+        state.page = result.page === "video" ? "video" : state.page;
+        state.hasMore = !!state.continuation;
+        state.loadingMore = false;
+        state.lastUpdated = Date.now();
+        rememberResultSet(state.provider, query, state.results, {
+          continuation: state.continuation,
+          page: state.page,
+          degraded: state.degraded
+        });
+        if (cacheable) {
+          cache.set(key, {
+            at: Date.now(),
+            tracks: state.results.slice(),
+            continuation: state.continuation,
+            page: state.page,
+            degraded: state.degraded
+          });
+        }
+
+        const value = snapshot();
+        emit("change", value);
+        return value;
+      })
+      .catch((error) => {
+        if (token !== state.token) return snapshot();
+        state.loadingMore = false;
+        console.warn(
+          "[online] gagal memuat halaman berikutnya:",
+          timedOut ? "timeout" : error
+        );
+        const value = snapshot();
+        emit("change", value);
+        return value;
+      })
+      .finally(() => {
+        window.clearTimeout(timer);
+      });
+  }
+
   /* ------------------------------------------------------------------------
      Akses data
      ------------------------------------------------------------------------ */
@@ -481,6 +617,9 @@
       errorKind: state.errorKind || "",
       results: state.results.slice(),
       total: state.results.length,
+      hasMore: !!state.hasMore,
+      loadingMore: !!state.loadingMore,
+      degraded: !!state.degraded,
       lastUpdated: state.lastUpdated
     };
   }
@@ -525,6 +664,7 @@
   AM.Online = {
     prepare,
     retry,
+    loadMore,
     snapshot,
     getSnapshot: snapshot,
     getTrack,

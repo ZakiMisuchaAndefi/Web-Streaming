@@ -11,7 +11,9 @@ module.exports = async (req, res) => {
     title,
     artist: String(req.query.artist || "").replace(/\s+/g, " ").trim().slice(0, 120),
     duration: Number(req.query.duration) || 0,
-    isrc: String(req.query.isrc || "").trim().slice(0, 32)
+    isrc: String(req.query.isrc || "").trim().slice(0, 32),
+    // Judul video asli (masih memuat "(Live)", "(Remix)", dll.).
+    rawTitle: String(req.query.rawTitle || "").replace(/\s+/g, " ").trim().slice(0, 240)
   };
 
   try {

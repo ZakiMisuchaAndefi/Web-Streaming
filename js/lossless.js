@@ -11,8 +11,8 @@
   "use strict";
 
   const CACHE_TTL = 6 * 60 * 60 * 1000;
-  const NEGATIVE_TTL = 10 * 60 * 1000;
-  const ERROR_TTL = 60 * 1000;
+  const NEGATIVE_TTL = 60 * 1000;
+  const ERROR_TTL = 30 * 1000;
   const TIMEOUT = 8000;
 
   const cache = new Map();
@@ -50,7 +50,8 @@
     return [
       info.song.toLowerCase(),
       info.artist.toLowerCase(),
-      Math.round(Number(track.duration) || 0)
+      Math.round(Number(track.duration) || 0),
+      String(track.title || "").toLowerCase()
     ].join("|");
   }
 
@@ -93,6 +94,9 @@
         if (info.artist) params.set("artist", info.artist);
         if (track.duration) params.set("duration", String(Math.round(Number(track.duration) || 0)));
         if (track.isrc) params.set("isrc", track.isrc);
+        // Judul asli dipakai server untuk mendeteksi versi live/remix yang
+        // sering tertulis di dalam tanda kurung.
+        if (track.title) params.set("rawTitle", String(track.title).slice(0, 240));
 
         const data = await fetchJSON(
           (window.API_BASE || "") + "/api/lossless?" + params.toString()

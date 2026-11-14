@@ -20,6 +20,14 @@ async function main() {
     return;
   }
 
+  if (command === "more") {
+    const cursor = String(args[0] || "").trim();
+    const page = String(args[1] || "").trim() === "video" ? "video" : "music";
+    const payload = await innertube.searchMore(cursor, { page, limit: 40 });
+    process.stdout.write(JSON.stringify(payload));
+    return;
+  }
+
   if (command === "audio") {
     const id = String(args[0] || "").trim();
     const quality = lib.qualityOf(args[1]);
