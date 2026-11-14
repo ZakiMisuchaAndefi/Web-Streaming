@@ -4269,6 +4269,9 @@
     }
     if (AM.Lossless && typeof AM.Lossless.clearCache === "function") {
       AM.Lossless.clearCache();
+      if (quality === "flac" && typeof AM.Lossless.warm === "function") {
+        AM.Lossless.warm(true);
+      }
     }
     syncSettingsControls();
 

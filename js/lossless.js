@@ -130,8 +130,8 @@
   // Pemanasan fungsi /api/lossless di Vercel: cold start pertama bisa memakan
   // beberapa detik. Dipanggil sekali saat aplikasi siap (hanya jika FLAC aktif)
   // supaya pemutaran pertama tidak kehabisan waktu lalu jatuh ke YouTube.
-  function warm() {
-    if (warmed || !shouldUse()) return Promise.resolve(false);
+  function warm(force) {
+    if ((!force && warmed) || !shouldUse()) return Promise.resolve(false);
     warmed = true;
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), TIMEOUT);
