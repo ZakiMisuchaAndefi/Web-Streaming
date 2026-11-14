@@ -34,7 +34,8 @@
     autoIds: new Set(),
     pendingSeek: null,
     restoring: false,
-    historyRecordedId: null
+    historyRecordedId: null,
+    format: null
   };
 
   const listeners = new Map();
@@ -82,6 +83,106 @@
 
   function currentTrack() {
     return lookupTrack(state.currentId);
+  }
+
+  /* ------------------------------------------------------------------------
+     Format audio yang sedang mengalir
+     Metadata ini dipakai pemutar untuk menampilkan codec + detail kecil
+     (sample rate, bitrate) ketika "Stats for nerds" diaktifkan.
+     ------------------------------------------------------------------------ */
+
+  const LOCAL_CODECS = {
+    flac: "FLAC",
+    alac: "ALAC",
+    mp3: "MP3",
+    m4a: "AAC",
+    mp4: "AAC",
+    aac: "AAC",
+    wav: "WAV",
+    aiff: "AIFF",
+    aif: "AIFF",
+    ogg: "VORBIS",
+    oga: "VORBIS",
+    opus: "OPUS",
+    webm: "OPUS"
+  };
+
+  function localFormat(track) {
+    if (!track) return null;
+    const fileName = String(track.fileName || "");
+    const extension = fileName.includes(".") ? fileName.split(".").pop().toLowerCase() : "";
+    const mime = String(track.fileType || "").toLowerCase();
+    let codec = LOCAL_CODECS[extension] || "";
+    if (!codec) {
+      if (mime.includes("flac")) codec = "FLAC";
+      else if (mime.includes("mpeg")) codec = "MP3";
+      else if (mime.includes("mp4") || mime.includes("aac")) codec = "AAC";
+      else if (mime.includes("wav")) codec = "WAV";
+      else if (mime.includes("ogg")) codec = "VORBIS";
+      else if (mime.includes("webm") || mime.includes("opus")) codec = "OPUS";
+    }
+    const duration = Number(state.duration) || Number(track.duration) || 0;
+    const bitrate = track.size && duration > 0 ? Math.round((track.size * 8) / duration) : 0;
+    return {
+      codec: codec || "AUDIO",
+      itag: 0,
+      bitrate,
+      sampleRate: 0,
+      channels: 0,
+      lossless: codec === "FLAC" || codec === "ALAC" || codec === "WAV" || codec === "AIFF",
+      requested: "",
+      fallback: false,
+      local: true
+    };
+  }
+
+  // Metadata awal: lokal langsung dari berkas, YouTube dari itag (Invidious)
+  // atau menunggu resolver (proxy).
+  function initialFormat(track) {
+    if (!track) return null;
+    if (track.provider === "youtube" && AM.Youtube) {
+      if (typeof AM.Youtube.formatFor === "function") {
+        return AM.Youtube.formatFor(track.audioVideoId || track.sourceId);
+      }
+      return null;
+    }
+    return localFormat(track);
+  }
+
+  function setFormat(format, trackId) {
+    const id = trackId == null ? state.currentId : trackId;
+    if (!id || id !== state.currentId) return;
+    const next = format || null;
+    const same =
+      state.format === next ||
+      (state.format &&
+        next &&
+        state.format.codec === next.codec &&
+        state.format.itag === next.itag &&
+        state.format.bitrate === next.bitrate &&
+        state.format.sampleRate === next.sampleRate);
+    state.format = next;
+    if (!same) emit("format", { track: currentTrack(), format: next });
+  }
+
+  // Ambil metadata format final saat audio benar-benar berjalan.
+  async function refreshFormat(trackId, token) {
+    const id = trackId || state.currentId;
+    if (!id) return;
+    if (token != null && token !== state.loadToken) return;
+    if (id !== state.currentId) return;
+    const track = lookupTrack(id);
+    if (!track) return;
+    if (track.provider !== "youtube") {
+      setFormat(localFormat(track), id);
+      return;
+    }
+    const sourceId = track.audioVideoId || track.sourceId;
+    if (!AM.Youtube) return;
+    if (typeof AM.Youtube.resolveFormat === "function") {
+      const format = await AM.Youtube.resolveFormat(sourceId);
+      if (format) setFormat(format, id);
+    }
   }
 
   function maybeRecordHistory() {
@@ -1066,7 +1167,9 @@
     state.currentTime = startAt;
     state.pendingSeek = opts.startAt != null ? startAt : null;
     state.duration = Number(track.duration) || 0;
+    state.format = initialFormat(track);
     emit("trackchange", { track });
+    emit("format", { track, format: state.format });
     emit("statechange", getState());
     emit("queuechange", getQueue());
     emit("time", { currentTime: startAt, duration: state.duration, buffered: 0 });
@@ -1353,7 +1456,8 @@
       duration: state.duration,
       currentTime: state.currentTime,
       queueLength: state.queue.length,
-      context: state.context
+      context: state.context,
+      format: state.format
     };
   }
 
@@ -1416,6 +1520,9 @@
       if (streamUrl) {
         audio.src = streamUrl;
         audio.load();
+        if (typeof AM.Youtube.formatFor === "function") {
+          setFormat(AM.Youtube.formatFor(sourceId, { attempt: retryCount + 1 }), trackId);
+        }
         track.audioRetrying = false;
         try {
           await audio.play();
@@ -1438,6 +1545,7 @@
       track.audioRetrying = false;
       const sourceId = track.audioVideoId || track.sourceId;
       audio.src = "yt:" + sourceId;
+      setFormat(null, trackId);
       try {
         await audio.play();
       } catch (error) {
@@ -1460,6 +1568,9 @@
         track.audioRetrying = true;
         audio.src = candidateUrl;
         audio.load();
+        if (typeof AM.Youtube.formatFor === "function") {
+          setFormat(AM.Youtube.formatFor(nextCandidate), trackId);
+        }
         try {
           await audio.play();
         } catch (error) {
@@ -1586,6 +1697,9 @@
     });
 
     audio.addEventListener("playing", () => {
+      const token = state.loadToken;
+      const trackId = state.currentId;
+      refreshFormat(trackId, token).catch(() => {});
       emit("ready", {});
     });
 

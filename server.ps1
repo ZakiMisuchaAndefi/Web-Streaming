@@ -385,7 +385,7 @@ function Invoke-INNER_TUBE($videoId, $quality) {
     $expires = [int64]$Matches[1]
   }
 
-  return @{ Status = 200; Url = $url; UserAgent = $userAgent; Expires = $expires }
+  return @{ Status = 200; Url = $url; UserAgent = $userAgent; Expires = $expires; Format = $entry.format }
 }
 
 function Invoke-INNER_TUBERadio($videoId) {
@@ -727,7 +727,7 @@ try {
       } elseif ($path -eq "/api/stream" -and ( $method -eq "GET" -or $headOnly) -and (Get-QueryValue $rawQuery "id")) {
         $videoId = Get-QueryValue $rawQuery "id"
         $quality = Get-QueryValue $rawQuery "quality"
-        if ([string]::IsNullOrEmpty($quality) -or $quality -notin @("low", "medium", "high", "best")) {
+        if ([string]::IsNullOrEmpty($quality) -or $quality -notin @("low", "medium", "high", "best", "flac")) {
           $quality = "best"
         }
         if ($videoId -notmatch '^[A-Za-z0-9_-]{11}$') {
@@ -740,7 +740,7 @@ try {
           if ($force -or -not ($cached -and [int64]$cached.Expires -gt ($now + 300))) {
             $resolved = Invoke-INNER_TUBE $videoId $quality
             if ($resolved.Status -eq 200) {
-              $cached = @{ Url = $resolved.Url; UserAgent = $resolved.UserAgent; Expires = [int64]$resolved.Expires }
+              $cached = @{ Url = $resolved.Url; UserAgent = $resolved.UserAgent; Expires = [int64]$resolved.Expires; Format = $resolved.Format }
               $script:audioCache[$cacheKey] = $cached
             } else {
               $status = if ($resolved.Status -eq 503) { 503 } else { 502 }
@@ -777,7 +777,7 @@ try {
         $videoId = Get-QueryValue $rawQuery "id"
         $quality = Get-QueryValue $rawQuery "quality"
         $force = (Get-QueryValue $rawQuery "force") -eq "1"
-        if ([string]::IsNullOrEmpty($quality) -or $quality -notin @("low", "medium", "high", "best")) {
+        if ([string]::IsNullOrEmpty($quality) -or $quality -notin @("low", "medium", "high", "best", "flac")) {
           $quality = "best"
         }
         if ([string]::IsNullOrEmpty($videoId) -or $videoId -notmatch '^[A-Za-z0-9_-]{11}$') {
@@ -787,13 +787,13 @@ try {
           $cacheKey = $videoId + "|" + $quality
           $proxyUrl = "/api/stream?id=" + [System.Uri]::EscapeDataString($videoId) + "&quality=" + [System.Uri]::EscapeDataString($quality)
           $cached = $script:audioCache[$cacheKey]
-          if (-not $force -and $cached -and [int64]$cached.Expires -gt ($now + 300)) {
-            Send-Json $stream 200 "OK" @{ url = $proxyUrl; expires = [int64]$cached.Expires; quality = $quality } $false
+          if (-not $force -and $cached -and $cached.Format -and [int64]$cached.Expires -gt ($now + 300)) {
+            Send-Json $stream 200 "OK" @{ url = $proxyUrl; expires = [int64]$cached.Expires; quality = $quality; format = $cached.Format } $false
           } else {
             $result = Invoke-INNER_TUBE $videoId $quality
             if ($result.Status -eq 200) {
-              $script:audioCache[$cacheKey] = @{ Url = $result.Url; UserAgent = $result.UserAgent; Expires = [int64]$result.Expires }
-              Send-Json $stream 200 "OK" @{ url = $proxyUrl; expires = [int64]$result.Expires; quality = $quality } $false
+              $script:audioCache[$cacheKey] = @{ Url = $result.Url; UserAgent = $result.UserAgent; Expires = [int64]$result.Expires; Format = $result.Format }
+              Send-Json $stream 200 "OK" @{ url = $proxyUrl; expires = [int64]$result.Expires; quality = $quality; format = $result.Format } $false
             } elseif ($result.Status -eq 503) {
               Send-Json $stream 503 "Service Unavailable" @{ error = $result.Error } $false
             } else {

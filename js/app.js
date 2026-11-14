@@ -45,17 +45,27 @@
     genre: "browse"
   };
 
-  const AUDIO_QUALITIES = [
+  // Pilihan format streaming. Nama tombol tetap ramah awam; detail format
+  // dijelaskan di baris keterangan dan tooltip.
+  const STREAM_FORMATS = [
+    { id: "low", label: "Hemat", hint: "OPUS 70 kbps · 48 kHz" },
+    { id: "medium", label: "Standar", hint: "OPUS 160 kbps · 48 kHz" },
+    { id: "high", label: "Tinggi", hint: "AAC/OPUS hingga 256 kbps" },
+    { id: "flac", label: "FLAC", hint: "Lossless bila sumber menyediakan" }
+  ];
+
+  const DOWNLOAD_QUALITIES = [
     { id: "low", label: "Hemat", hint: "hingga 96 kbps" },
     { id: "medium", label: "Standar", hint: "hingga 128 kbps" },
     { id: "high", label: "Tinggi", hint: "hingga 192 kbps" },
     { id: "best", label: "Terbaik", hint: "audio sumber" }
   ];
 
-  function qualitySegmented(action, current, extra) {
+  function qualitySegmented(action, current, extra, qualities) {
+    const list = qualities || DOWNLOAD_QUALITIES;
     return (
       '<div class="segmented segmented--wrap">' +
-      AUDIO_QUALITIES.map(
+      list.map(
         (quality) =>
           '<button class="segmented__btn' +
           (quality.id === current ? " is-active" : "") +
@@ -217,6 +227,7 @@
     els.playerArtButton = $("#playerArtButton");
     els.playerTitle = $("#playerTitle");
     els.playerArtist = $("#playerArtist");
+    els.playerFormat = $("#playerFormat");
     els.playerLike = $("#playerLike");
     els.playerDownload = $("#playerDownload");
     els.btnShuffle = $("#btnShuffle");
@@ -259,6 +270,7 @@
     els.npTitle = $("#npTitle");
     els.npArtist = $("#npArtist");
     els.npAlbum = $("#npAlbum");
+    els.npFormat = $("#npFormat");
     els.npContext = $("#npContext");
     els.npClose = $("#npClose");
     els.npExpand = $("#npExpand");
@@ -683,6 +695,9 @@
       syncTrackRows();
       renderQueue();
     });
+    P.on("format", () => {
+      syncPlayerBar(P.getState());
+    });
     P.on("queuechange", renderQueue);
     P.on("queueadded", () => {
       if (state.queueOpen || P.getQueue().queue.length < 2) return;
@@ -785,6 +800,42 @@
     state.youtubeErrorToast = null;
   }
 
+  // Teks format untuk pemutar. Mode ringkas hanya codec; "Stats for nerds"
+  // menambahkan bitrate, sample rate, kanal, dan penanda fallback FLAC.
+  // `compact` dipakai pill pemutar yang ruangnya sempit: sample rate lebih
+  // dulu agar kHz tetap terlihat walau teks dipotong.
+  function formatText(format, stats, compact) {
+    if (!format) return "";
+    if (format.pending) return stats ? "Mendeteksi format…" : "";
+    const codec = format.codec || "Audio";
+    const fallback = format.requested === "flac" && format.fallback;
+    const head = fallback ? "FLAC→" + codec : codec;
+    if (!stats) return head;
+
+    if (compact) {
+      const short = [];
+      if (format.sampleRate) {
+        short.push((format.sampleRate / 1000).toFixed(1).replace(/\.0$/, "") + "kHz");
+      } else if (format.bitrate) {
+        short.push(Math.round(format.bitrate / 1000) + "k");
+      }
+      return short.length ? codec + " " + short.join(" ") : codec;
+    }
+
+    const bits = [];
+    if (format.bitrate) bits.push(Math.round(format.bitrate / 1000) + " kbps");
+    if (format.sampleRate) {
+      bits.push((format.sampleRate / 1000).toFixed(1).replace(/\.0$/, "") + " kHz");
+    }
+    if (format.channels) {
+      bits.push(format.channels === 1 ? "mono" : format.channels === 2 ? "stereo" : format.channels + " kanal");
+    }
+    if (format.lossless) bits.push("lossless");
+    if (format.itag) bits.push("itag " + format.itag);
+    if (format.local) bits.push("berkas lokal");
+    return bits.length ? head + " · " + bits.join(" · ") : head;
+  }
+
   function syncPlayerBar(playerState) {
     const s = playerState || P.getState();
     const track = s.track || null;
@@ -806,6 +857,16 @@
           ? "Cari " + track.artist + " di " + providerLabel
           : "Buka artis " + track.artist
         : "Buka artis";
+    }
+    if (els.playerFormat) {
+      const format = s.format || null;
+      const stats = !!L.getSetting("statsForNerds", false);
+      const text = hasTrack ? formatText(format, stats, true) : "";
+      els.playerFormat.textContent = text;
+      els.playerFormat.hidden = !text;
+      els.playerFormat.title = hasTrack
+        ? formatText(format, true, false) || "Format audio sedang dideteksi"
+        : "Format audio";
     }
     if (els.playerArt) {
       const art = L.trackArt(track);
@@ -966,6 +1027,16 @@
       const parts = [];
       if (provider && !parts.includes(provider)) parts.push(provider);
       els.npAlbum.textContent = parts.join(" · ");
+    }
+    if (els.npFormat) {
+      const format = s.format || null;
+      const stats = !!L.getSetting("statsForNerds", false);
+      const text = hasTrack ? formatText(format, stats, false) : "";
+      els.npFormat.textContent = text;
+      els.npFormat.hidden = !text;
+      els.npFormat.title = hasTrack
+        ? formatText(format, true, false) || "Format audio sedang dideteksi"
+        : "Format audio";
     }
     if (els.npContext) {
       const label = s.context && s.context.label ? String(s.context.label) : "";
@@ -2157,6 +2228,12 @@
         return applyStreamQuality(actionEl.dataset.value || "high");
       case "set-download-quality":
         return applyDownloadQuality(actionEl.dataset.value || "best");
+      case "set-stats":
+        L.setSetting("statsForNerds", actionEl.dataset.value === "true");
+        syncSettingsControls();
+        syncPlayerBar();
+        syncNowPlaying();
+        return;
       case "settings-import":
         closeSettingsForAction(() => openImportDialog());
         return;
@@ -3865,6 +3942,7 @@
     const repeat = P.state.repeat;
     const streamQuality = L.getSetting("streamQuality", "high");
     const downloadQuality = L.getSetting("downloadQuality", "best");
+    const statsForNerds = !!L.getSetting("statsForNerds", false);
     return (
       '<div class="settings">' +
       '<section class="settings-group"><h3 class="settings-group__title">Tampilan</h3>' +
@@ -3908,10 +3986,19 @@
       icon("moon") +
       "Atur</button></div></div></section>" +
       '<section class="settings-group"><h3 class="settings-group__title">Audio</h3>' +
-      '<div class="settings-row"><div class="settings-row__text"><div class="settings-row__title">Kualitas streaming</div><div class="settings-row__sub">Bitrate audio untuk lagu YouTube. Perubahan diterapkan ulang ke lagu yang sedang diputar.</div></div>' +
+      '<div class="settings-row"><div class="settings-row__text"><div class="settings-row__title">Format streaming</div><div class="settings-row__sub">Hemat = OPUS 70 kbps · Standar = OPUS 160 kbps · Tinggi = hingga 256 kbps (AAC/OPUS) · FLAC = lossless bila sumber menyediakan, jika tidak otomatis turun ke format terbaik. Format yang benar-benar dipakai selalu tampil di pemutar.</div></div>' +
       '<div class="settings-row__action">' +
-      qualitySegmented("set-stream-quality", streamQuality) +
+      qualitySegmented("set-stream-quality", streamQuality, "", STREAM_FORMATS) +
       "</div></div>" +
+      '<div class="settings-row"><div class="settings-row__text"><div class="settings-row__title">Stats for nerds</div><div class="settings-row__sub">Tampilkan detail teknis audio (codec, bitrate, sample rate, kanal) dalam teks kecil di pemutar.</div></div>' +
+      '<div class="settings-row__action"><div class="segmented">' +
+      '<button class="segmented__btn' +
+      (statsForNerds ? "" : " is-active") +
+      '" type="button" data-action="set-stats" data-value="false">Mati</button>' +
+      '<button class="segmented__btn' +
+      (statsForNerds ? " is-active" : "") +
+      '" type="button" data-action="set-stats" data-value="true">Aktif</button>' +
+      "</div></div></div>" +
       '<div class="settings-row"><div class="settings-row__text"><div class="settings-row__title">Kualitas unduhan (MP3)</div><div class="settings-row__sub">Semua unduhan YouTube dikonversi ke MP3 dengan judul, artis, album, dan sampul tertanam. Membutuhkan ffmpeg.exe di folder aplikasi.</div></div>' +
       '<div class="settings-row__action">' +
       qualitySegmented("set-download-quality", downloadQuality) +
@@ -3973,7 +4060,8 @@
     $$('[data-action="set-repeat"]', root).forEach((button) => {
       button.classList.toggle("is-active", (button.dataset.value || "off") === P.state.repeat);
     });
-    const streamQuality = L.getSetting("streamQuality", "high");
+    const storedStream = L.getSetting("streamQuality", "high");
+    const streamQuality = STREAM_FORMATS.some((item) => item.id === storedStream) ? storedStream : "high";
     $$('[data-action="set-stream-quality"]', root).forEach((button) => {
       button.classList.toggle("is-active", (button.dataset.value || "high") === streamQuality);
     });
@@ -3981,15 +4069,21 @@
     $$('[data-action="set-download-quality"]', root).forEach((button) => {
       button.classList.toggle("is-active", (button.dataset.value || "best") === downloadQuality);
     });
+    const statsForNerds = !!L.getSetting("statsForNerds", false);
+    $$('[data-action="set-stats"]', root).forEach((button) => {
+      button.classList.toggle("is-active", (button.dataset.value === "true") === statsForNerds);
+    });
   }
 
   function qualityLabel(id) {
-    const quality = AUDIO_QUALITIES.find((item) => item.id === id);
-    return quality ? quality.label + " (" + quality.hint + ")" : "Terbaik (audio sumber)";
+    const quality =
+      STREAM_FORMATS.find((item) => item.id === id) ||
+      DOWNLOAD_QUALITIES.find((item) => item.id === id);
+    return quality ? quality.label + " (" + quality.hint + ")" : "Tinggi (audio sumber)";
   }
 
   async function applyStreamQuality(value) {
-    const quality = AUDIO_QUALITIES.some((item) => item.id === value) ? value : "high";
+    const quality = STREAM_FORMATS.some((item) => item.id === value) ? value : "high";
     const previous = L.getSetting("streamQuality", "high");
     if (previous === quality) {
       syncSettingsControls();
@@ -4019,7 +4113,7 @@
   }
 
   async function applyDownloadQuality(value) {
-    const quality = AUDIO_QUALITIES.some((item) => item.id === value) ? value : "best";
+    const quality = DOWNLOAD_QUALITIES.some((item) => item.id === value) ? value : "best";
     await L.setSetting("downloadQuality", quality);
     syncSettingsControls();
     toast("Kualitas unduhan: " + qualityLabel(quality) + ".");

@@ -38,8 +38,14 @@ const BOOTSTRAP_TTL_MS = 30 * 60 * 1000;
 let bootstrapCache = null;
 let bootstrapTask = null;
 
-const qualityOf = (q) => (q === "low" || q === "medium" || q === "high" || q === "best" ? q : "best");
-const BITRATE_LIMIT = { low: 96000, medium: 128000, high: 192000, best: Infinity };
+// Mode "flac" meminta audio lossless. YouTube tidak menyediakannya, jadi mode
+// ini jatuh ke format terbaik yang tersedia dan ditandai `fallback: true`.
+const qualityOf = (q) =>
+  q === "low" || q === "medium" || q === "high" || q === "best" || q === "flac" ? q : "best";
+
+// Batas bitrate per mode (bps). Standar sengaja di bawah 160k agar Opus 160
+// terpilih, bukan AAC 128; Tinggi/Terbaik membiarkan sumber memilih yang terbaik.
+const BITRATE_LIMIT = { low: 96000, medium: 170000, high: Infinity, best: Infinity, flac: Infinity };
 
 function trimAudioCache() {
   while (audioCache.size > MAX_AUDIO_CACHE) {
@@ -271,6 +277,35 @@ async function visionosPlayer(videoId, boot) {
   }
 }
 
+// Nama codec dari mimeType InnerTube, untuk ditampilkan di pemutar.
+function codecOf(format) {
+  const mime = String((format && format.mimeType) || "").toLowerCase();
+  if (mime.includes("audio/flac")) return "FLAC";
+  if (mime.includes("audio/opus") || /codecs="?opus/.test(mime)) return "OPUS";
+  if (mime.includes("audio/aac") || /mp4a/.test(mime)) return "AAC";
+  if (mime.includes("audio/mp4")) return "AAC";
+  if (mime.includes("audio/webm")) return "OPUS"; // WebM audio YouTube selalu Opus
+  if (mime.includes("audio/mpeg")) return "MP3";
+  if (mime.includes("audio/ogg")) return "VORBIS";
+  return "AUDIO";
+}
+
+// Ringkasan format yang benar-benar dipakai, dikirim ke pemutar.
+function formatInfo(format, mode) {
+  const codec = codecOf(format);
+  const lossless = codec === "FLAC";
+  return {
+    codec,
+    itag: Number(format && format.itag) || 0,
+    bitrate: Number(format && format.bitrate) || 0,
+    sampleRate: Number(format && format.audioSampleRate) || 0,
+    channels: Number(format && format.audioChannels) || 0,
+    lossless,
+    requested: mode,
+    fallback: mode === "flac" && !lossless
+  };
+}
+
 function pickAudioFormat(formats, mode) {
   const limit = BITRATE_LIMIT[mode] || Infinity;
   const candidates = (Array.isArray(formats) ? formats : []).filter((format) => {
@@ -288,6 +323,13 @@ function pickAudioFormat(formats, mode) {
     if (leftWebm !== rightWebm) return leftWebm ? -1 : 1;
     return (Number(right.bitrate) || 0) - (Number(left.bitrate) || 0);
   });
+
+  if (mode === "flac") {
+    // Sumber lokal/berkas bisa saja FLAC, tetapi YouTube hanya AAC/Opus.
+    const lossless = sorted.filter((format) => /audio\/flac/i.test(String(format.mimeType)));
+    return lossless.length ? lossless[0] : sorted[0];
+  }
+
   const allowed = sorted.filter((format) => (Number(format.bitrate) || 0) <= limit);
   return allowed.length ? allowed[0] : sorted[0];
 }
@@ -358,7 +400,8 @@ async function resolveWithVisionOs(videoId, mode) {
     return {
       url: chosen.url,
       headers: { "User-Agent": VISIONOS_UA },
-      expires: expiresFromUrl(chosen.url)
+      expires: expiresFromUrl(chosen.url),
+      format: formatInfo(chosen, mode)
     };
   }
 
@@ -375,7 +418,8 @@ async function getAudioUrl(id, quality, force) {
   const now = Math.floor(Date.now() / 1000);
   if (force) audioCache.delete(key);
   const cached = audioCache.get(key);
-  if (cached && Number(cached.expires) > now + 300) return cached;
+  // Entri lama (sebelum metadata format ada) diabaikan agar format ikut terisi.
+  if (cached && cached.format && Number(cached.expires) > now + 300) return cached;
 
   const entry = await resolveWithVisionOs(id, mode);
   audioCache.set(key, entry);
@@ -402,7 +446,9 @@ const lib = {
   qualityOf,
   innertube,
   getAudioUrl,
-  isAllowed
+  isAllowed,
+  codecOf,
+  formatInfo
 };
 
 module.exports = lib;

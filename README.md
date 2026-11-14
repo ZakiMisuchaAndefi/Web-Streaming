@@ -159,10 +159,12 @@ Catatan:
 - File disimpan di folder **`downloads/`** di folder aplikasi dan dinamai `Judul [ID].mp3`. Server membersihkan file unduhan yang lebih lama dari 7 hari dan mengabaikan file `.webm` lama.
 - **Lossless/FLAC tidak tersedia** karena sumber audio YouTube sudah berupa audio lossy. Tombol **Lossless** ditampilkan nonaktif dengan penjelasan ini.
 
-### Kualitas streaming
+### Format streaming
 
-- **Pengaturan → Audio → Kualitas streaming** mengatur bitrate audio YouTube yang diambil resolver: **Hemat**, **Standar**, **Tinggi**, atau **Terbaik**.
-- Jika diubah saat lagu YouTube sedang diputar, aplikasi membersihkan cache audio dan memuat ulang lagu pada posisi yang sama.
+- **Pengaturan → Audio → Format streaming** memilih format audio YouTube yang diambil resolver: **Hemat** (OPUS 70 kbps), **Standar** (OPUS 160 kbps), **Tinggi** (AAC/OPUS hingga 256 kbps sesuai sumber), atau **FLAC**.
+- **FLAC** hanya benar-benar dipakai bila sumbernya menyediakan audio lossless (mis. berkas FLAC lokal). YouTube tidak menyediakan FLAC, jadi untuk lagu YouTube opsi ini otomatis turun ke format terbaik yang tersedia; pemutar menampilkan `FLAC→OPUS` sebagai penanda fallback.
+- Pemutar selalu menampilkan codec yang benar-benar mengalir. Aktifkan **Stats for nerds** di Pengaturan untuk melihat bitrate, sample rate, jumlah kanal, dan itag dalam teks kecil di pemutar.
+- Jika format diubah saat lagu YouTube sedang diputar, aplikasi membersihkan cache audio dan memuat ulang lagu pada posisi yang sama.
 
 Umum:
 

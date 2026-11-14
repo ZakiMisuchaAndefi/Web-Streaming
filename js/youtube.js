@@ -26,10 +26,26 @@
     }
   })();
 
-  // Urutan itag audio Invidious: m4a/AAC dulu (paling kompatibel), lalu webm.
+  // Urutan itag audio Invidious: Opus dulu (bitrate tertinggi), lalu AAC
+  // sebagai cadangan yang paling kompatibel. "flac" tidak tersedia di YouTube,
+  // jadi ia memakai format terbaik dan ditandai sebagai fallback.
   const INVIDIOUS_ITAGS = {
-    high: [140, 251, 250, 249, 139],
-    low: [139, 249, 250, 140, 251]
+    low: [249, 139, 250, 140, 251],
+    medium: [251, 250, 140, 249, 139],
+    high: [251, 140, 250, 249, 139],
+    best: [251, 140, 250, 249, 139],
+    flac: [251, 140, 250, 249, 139]
+  };
+
+  // Metadata itag audio YouTube (bitrate nomina) untuk pemutar.
+  const ITAG_INFO = {
+    139: { codec: "AAC", bitrate: 48000, sampleRate: 44100, channels: 2 },
+    140: { codec: "AAC", bitrate: 128000, sampleRate: 44100, channels: 2 },
+    141: { codec: "AAC", bitrate: 256000, sampleRate: 44100, channels: 2 },
+    249: { codec: "OPUS", bitrate: 50000, sampleRate: 48000, channels: 2 },
+    250: { codec: "OPUS", bitrate: 70000, sampleRate: 48000, channels: 2 },
+    251: { codec: "OPUS", bitrate: 160000, sampleRate: 48000, channels: 2 },
+    774: { codec: "OPUS", bitrate: 256000, sampleRate: 48000, channels: 2 }
   };
 
   let streamEngine = ENGINE_OVERRIDE || "unknown";
@@ -359,6 +375,8 @@
   const AUDIO_CACHE_MARGIN = 5 * 60 * 1000;
   const audioCache = new Map();
   const audioInflight = new Map();
+  const formatCache = new Map();
+  const formatInflight = new Map();
   const relatedCache = new Map();
   const RELATED_TTL = 15 * 60 * 1000;
   let resolverCheck = null;
@@ -390,7 +408,7 @@
 
   function audioQuality() {
     const value = AM.Library ? AM.Library.getSetting("streamQuality", "high") : "high";
-    return ["low", "medium", "high", "best"].includes(value) ? value : "high";
+    return ["low", "medium", "high", "best", "flac"].includes(value) ? value : "high";
   }
 
   function audioStreamUrl(videoId, options) {
@@ -427,9 +445,92 @@
     );
   }
 
+  // Ringkasan format dari itag (dipakai Invidious, yang tidak memberi detail).
+  function describeItag(itag, requested) {
+    const info = ITAG_INFO[Number(itag)] || {};
+    const codec = info.codec || "";
+    const lossless = codec === "FLAC";
+    return {
+      codec,
+      itag: Number(itag) || 0,
+      bitrate: info.bitrate || 0,
+      sampleRate: info.sampleRate || 0,
+      channels: info.channels || 0,
+      lossless,
+      requested,
+      fallback: requested === "flac" && !lossless
+    };
+  }
+
+  // Metadata format yang bisa diketahui seketika (tanpa menunggu jaringan).
+  function formatFor(videoId, options) {
+    const id = String(videoId || "").trim();
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
+    if (streamEngine === "iframe") return null;
+    const requested = audioQuality();
+    if ((streamEngine === "invidious" || streamEngine === "unknown") && invidiousHost) {
+      const list = INVIDIOUS_ITAGS[requested] || INVIDIOUS_ITAGS.high;
+      const attempt = Math.max(0, Math.min(list.length - 1, Number(options && options.attempt) || 0));
+      return describeItag(list[attempt], requested);
+    }
+    const cached = formatCache.get(id + "|" + requested);
+    return cached && cached.expiresAt > Date.now()
+      ? cached.format
+      : { codec: "", requested, pending: true };
+  }
+
+  // Metadata format final dari resolver server (proxy). Hasilnya di-cache agar
+  // tidak memicu resolusi InnerTube tambahan saat lagu mulai berbunyi.
+  async function resolveFormat(videoId, options) {
+    const opts = options || {};
+    const id = String(videoId || "").trim();
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
+    if (streamEngine === "iframe") return null;
+    if ((streamEngine === "invidious" || streamEngine === "unknown") && invidiousHost) {
+      return formatFor(id, opts);
+    }
+
+    const requested = audioQuality();
+    const cacheKey = id + "|" + requested;
+    const cached = formatCache.get(cacheKey);
+    if (!opts.force && cached && cached.expiresAt > Date.now()) return cached.format;
+    if (formatInflight.has(cacheKey)) return formatInflight.get(cacheKey);
+
+    const task = (async () => {
+      try {
+        const response = await fetchWithTimeout(
+          (window.API_BASE || "") +
+            "/api/resolve?id=" +
+            encodeURIComponent(id) +
+            "&quality=" +
+            encodeURIComponent(requested),
+          45000
+        );
+        if (!response.ok) return null;
+        const data = await response.json();
+        const format = data && data.format ? data.format : null;
+        if (!format) return null;
+        const expires = Number(data && data.expires) || 0;
+        const expiresAt =
+          expires > 0 ? expires * 1000 - AUDIO_CACHE_MARGIN : Date.now() + 60 * 60 * 1000;
+        formatCache.set(cacheKey, { format, expiresAt });
+        return format;
+      } catch (error) {
+        return null;
+      } finally {
+        formatInflight.delete(cacheKey);
+      }
+    })();
+
+    formatInflight.set(cacheKey, task);
+    return task;
+  }
+
   function clearAudioCache() {
     audioCache.clear();
     audioInflight.clear();
+    formatCache.clear();
+    formatInflight.clear();
   }
 
   async function resolveAudio(videoId, options) {
@@ -469,12 +570,14 @@
         const data = await response.json();
         const url = data && typeof data.url === "string" ? data.url.trim() : "";
         if (!url) return null;
+        const format = data && data.format ? data.format : null;
         const expires = Number(data && data.expires) || 0;
         const expiresAt =
           expires > 0
             ? expires * 1000 - AUDIO_CACHE_MARGIN
             : Date.now() + 60 * 60 * 1000;
         audioCache.set(cacheKey, { url, expiresAt });
+        if (format) formatCache.set(cacheKey, { format, expiresAt });
         return url;
       } catch (error) {
         return null;
@@ -761,6 +864,8 @@
     titlesSimilar,
     resolve,
     resolveAudio,
+    resolveFormat,
+    formatFor,
     audioStreamUrl,
     clearAudioCache,
     related,

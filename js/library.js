@@ -33,7 +33,8 @@
     demoLoaded: false,
     lastRoute: "#/home",
     streamQuality: "high",
-    downloadQuality: "best"
+    downloadQuality: "best",
+    statsForNerds: false
   };
 
   const state = {

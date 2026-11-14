@@ -130,6 +130,22 @@
   text-underline-offset: 2px;
 }
 
+/* Format audio yang sedang mengalir — kecil, hanya informasi. */
+.player__format {
+  max-width: 100%;
+  margin-top: 1px;
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .player__title:disabled,
 .player__artist:disabled {
   cursor: default;
@@ -1231,6 +1247,18 @@ body.has-now-playing {
 
 .now-playing__album {
   display: none;
+}
+
+/* Detail teknis kecil di bawah judul (muncul dengan Stats for nerds). */
+.now-playing__format {
+  max-width: min(100%, 460px);
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .now-playing__actions {

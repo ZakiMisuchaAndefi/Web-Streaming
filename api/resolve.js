@@ -15,7 +15,8 @@ module.exports = async (req, res) => {
         "&quality=" +
         encodeURIComponent(quality),
       expires: entry.expires,
-      quality
+      quality,
+      format: entry.format || null
     });
   } catch (error) {
     console.error("[resolve] gagal menyiapkan audio:", error);
