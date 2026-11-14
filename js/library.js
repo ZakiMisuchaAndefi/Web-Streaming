@@ -561,6 +561,12 @@
     return url;
   }
 
+  // Blob asli berkas lokal (dipakai pembaca header format di pemutar).
+  async function getAudioBlob(trackId) {
+    const record = await store.get("files", trackId);
+    return record && record.blob ? record.blob : null;
+  }
+
   function releaseAudioURL(trackId) {
     const url = state.audioUrls.get(trackId);
     if (!url) return;
@@ -1229,6 +1235,7 @@
     artistArt,
     playlistArt,
     getAudioURL,
+    getAudioBlob,
     isAudioFile,
     importFiles,
     importDemo,

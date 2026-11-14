@@ -184,7 +184,7 @@
         <div class="player__meta">
           <button class="player__title" id="playerTitle" type="button" title="Buka album" disabled>Tidak ada yang diputar</button>
           <button class="player__artist" id="playerArtist" type="button" title="Buka artis" disabled>Pilih lagu dari perpustakaanmu</button>
-          <span class="player__format" id="playerFormat" hidden></span>
+          <button class="player__format" id="playerFormat" type="button" data-action="stats-info" title="Info format audio" aria-label="Info format audio" hidden></button>
         </div>
         <button class="icon-btn player__like" id="playerLike" type="button" title="Sukai" aria-label="Sukai lagu" aria-pressed="false" disabled>
           <svg class="icon" aria-hidden="true"><use href="#i-heart"></use></svg>
@@ -307,7 +307,8 @@
               <h2 class="now-playing__title" id="npTitle">Tidak ada yang diputar</h2>
               <p class="now-playing__artist" id="npArtist">Pilih lagu dari perpustakaanmu</p>
               <p class="now-playing__album" id="npAlbum"></p>
-              <p class="now-playing__format" id="npFormat" hidden></p>
+              <button class="now-playing__format" id="npFormat" type="button" data-action="stats-info" title="Info format audio" aria-label="Info format audio" hidden></button>
+              <span class="now-playing__format-detail" id="npFormatDetail" hidden></span>
             </div>
             <div class="now-playing__actions">
               <button class="icon-btn now-playing__like" id="npLike" type="button" title="Sukai" aria-label="Sukai lagu" aria-pressed="false" disabled>

@@ -290,12 +290,26 @@ function codecOf(format) {
   return "AUDIO";
 }
 
+// Wadah/container dari mimeType (webm, mp4, ogg, flac, ...).
+function containerOf(format) {
+  const mime = String((format && format.mimeType) || "").toLowerCase();
+  if (mime.includes("audio/webm")) return "WebM";
+  if (mime.includes("audio/mp4")) return "MP4";
+  if (mime.includes("audio/flac")) return "FLAC";
+  if (mime.includes("audio/ogg")) return "OGG";
+  if (mime.includes("audio/mpeg")) return "MP3";
+  if (mime.includes("audio/wav")) return "WAV";
+  return "";
+}
+
 // Ringkasan format yang benar-benar dipakai, dikirim ke pemutar.
 function formatInfo(format, mode) {
   const codec = codecOf(format);
   const lossless = codec === "FLAC";
   return {
     codec,
+    container: containerOf(format),
+    mimeType: String((format && format.mimeType) || ""),
     itag: Number(format && format.itag) || 0,
     bitrate: Number(format && format.bitrate) || 0,
     sampleRate: Number(format && format.audioSampleRate) || 0,

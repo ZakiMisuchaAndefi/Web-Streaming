@@ -271,6 +271,7 @@
     els.npArtist = $("#npArtist");
     els.npAlbum = $("#npAlbum");
     els.npFormat = $("#npFormat");
+    els.npFormatDetail = $("#npFormatDetail");
     els.npContext = $("#npContext");
     els.npClose = $("#npClose");
     els.npExpand = $("#npExpand");
@@ -697,6 +698,7 @@
     });
     P.on("format", () => {
       syncPlayerBar(P.getState());
+      syncNowPlaying(P.getState());
     });
     P.on("queuechange", renderQueue);
     P.on("queueadded", () => {
@@ -800,40 +802,188 @@
     state.youtubeErrorToast = null;
   }
 
-  // Teks format untuk pemutar. Mode ringkas hanya codec; "Stats for nerds"
-  // menambahkan bitrate, sample rate, kanal, dan penanda fallback FLAC.
-  // `compact` dipakai pill pemutar yang ruangnya sempit: sample rate lebih
-  // dulu agar kHz tetap terlihat walau teks dipotong.
-  function formatText(format, stats, compact) {
+  // Angka desimal gaya Indonesia untuk label audio (44,1 kHz).
+  function decimal(value, digits) {
+    const text = Number(value).toFixed(digits == null ? 1 : digits);
+    return (digits ? text : text.replace(/\.0$/, "")).replace(".", ",");
+  }
+
+  function khz(value) {
+    if (!value) return "";
+    return decimal(value / 1000) + " kHz";
+  }
+
+  function kbps(value) {
+    if (!value) return "";
+    return Math.round(value / 1000) + " kbps";
+  }
+
+  function channelsText(channels) {
+    if (!channels) return "";
+    if (channels === 1) return "1 (mono)";
+    if (channels === 2) return "2 (stereo)";
+    return channels + " kanal";
+  }
+
+  // Isi chip format: codec + sample rate (atau bitrate bila rate belum ada).
+  // Contoh: "FLAC · 44,1 kHz", "OPUS · 48 kHz", "FLAC → OPUS · 48 kHz".
+  function chipText(format) {
     if (!format) return "";
-    if (format.pending) return stats ? "Mendeteksi format…" : "";
+    if (format.pending) return "Mendeteksi…";
     const codec = format.codec || "Audio";
     const fallback = format.requested === "flac" && format.fallback;
-    const head = fallback ? "FLAC→" + codec : codec;
-    if (!stats) return head;
+    const head = fallback ? "FLAC → " + codec : codec;
+    const rate = khz(format.sampleRate) || kbps(format.bitrate);
+    return rate ? head + " · " + rate : head;
+  }
 
-    if (compact) {
-      const short = [];
-      if (format.sampleRate) {
-        short.push((format.sampleRate / 1000).toFixed(1).replace(/\.0$/, "") + "kHz");
-      } else if (format.bitrate) {
-        short.push(Math.round(format.bitrate / 1000) + "k");
-      }
-      return short.length ? codec + " " + short.join(" ") : codec;
-    }
-
+  // Baris detail kecil saat "Stats for nerds" aktif di Now Playing.
+  function formatDetailText(format) {
+    if (!format || format.pending) return "";
     const bits = [];
-    if (format.bitrate) bits.push(Math.round(format.bitrate / 1000) + " kbps");
-    if (format.sampleRate) {
-      bits.push((format.sampleRate / 1000).toFixed(1).replace(/\.0$/, "") + " kHz");
-    }
-    if (format.channels) {
-      bits.push(format.channels === 1 ? "mono" : format.channels === 2 ? "stereo" : format.channels + " kanal");
-    }
+    if (format.bitrate) bits.push(kbps(format.bitrate));
+    const rate = khz(format.sampleRate);
+    if (rate) bits.push(rate);
+    const channels = channelsText(format.channels);
+    if (channels) bits.push(channels);
+    if (format.bitDepth) bits.push(format.bitDepth + "-bit");
     if (format.lossless) bits.push("lossless");
     if (format.itag) bits.push("itag " + format.itag);
     if (format.local) bits.push("berkas lokal");
-    return bits.length ? head + " · " + bits.join(" · ") : head;
+    if (format.requested === "flac" && format.fallback) bits.push("FLAC tidak tersedia");
+    return bits.join(" · ");
+  }
+
+  function formatTooltip(format) {
+    const chip = chipText(format);
+    if (!chip) return "Format audio sedang dideteksi";
+    const detail = formatDetailText(format);
+    return detail && detail !== chip ? chip + " — " + detail : chip;
+  }
+
+  const STREAM_MODE_LABELS = { low: "Hemat", medium: "Standar", high: "Tinggi", flac: "FLAC" };
+
+  function statsSectionHTML(title, rows) {
+    const items = rows
+      .filter((row) => row && row[1] != null && row[1] !== "")
+      .map(
+        (row) =>
+          '<div class="stats-row"><dt>' +
+          U.esc(row[0]) +
+          "</dt><dd>" +
+          U.esc(row[1]) +
+          "</dd></div>"
+      )
+      .join("");
+    if (!items) return "";
+    return (
+      '<section class="stats-section"><h3 class="stats-section__title">' +
+      U.esc(title) +
+      '</h3><dl class="stats-list">' +
+      items +
+      "</dl></section>"
+    );
+  }
+
+  function bufferPercent(audio) {
+    try {
+      if (!audio || !audio.buffered || !audio.buffered.length) return 0;
+      const end = audio.buffered.end(audio.buffered.length - 1);
+      if (!audio.duration) return 0;
+      return Math.max(0, Math.min(100, Math.round((end / audio.duration) * 100)));
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  function engineLabel(track) {
+    if (!track) return "Tidak aktif";
+    if (track.provider !== "youtube") return "Berkas lokal (browser)";
+    const engine =
+      AM.Youtube && typeof AM.Youtube.getStreamEngine === "function" ? AM.Youtube.getStreamEngine() : "";
+    if (engine === "proxy") return "Proxy audio lokal";
+    if (engine === "invidious") return "Invidious";
+    if (engine === "iframe") return "Iframe YouTube";
+    return "Otomatis";
+  }
+
+  // Panel "Stats for nerds": hanya data yang benar-benar bisa diamati.
+  function openStatsForNerds() {
+    const ensure = P.ensureFormat ? P.ensureFormat() : Promise.resolve(null);
+    return Promise.resolve(ensure)
+      .catch(() => null)
+      .then(() => {
+        const s = P.getState();
+        const track = s.track;
+        if (!track) return;
+        const format = s.format || {};
+        const audio = els.audio;
+        const fallback = format.requested === "flac" && format.fallback;
+        const status = s.isPlaying ? "Memutar" : audio && audio.readyState >= 2 ? "Dijeda" : "Memuat";
+        const volume = s.muted ? "Bisu" : Math.round((Number(s.volume) || 0) * 100) + "%";
+        const position =
+          U.fmtTime(Number(s.currentTime) || 0) + " / " + U.fmtTime(Number(s.duration) || 0);
+        const buffer = bufferPercent(audio);
+
+        const formatRows = [
+          ["Codec", format.codec || "Tidak diketahui"],
+          ["Jenis", format.lossless ? "Lossless" : "Lossy (terkompresi)"],
+          ["Wadah", format.container || "Tidak diketahui"],
+          ["MIME", format.mimeType || "Tidak diketahui"],
+          ["Bitrate", kbps(format.bitrate) || "Tidak tersedia"],
+          ["Sample rate", khz(format.sampleRate) || "Tidak tersedia"],
+          ["Kanal", channelsText(format.channels) || "Tidak tersedia"],
+          ["Bit depth", format.bitDepth ? format.bitDepth + "-bit" : format.local ? "Tidak tersedia" : "—"],
+          ["Itag", format.itag ? String(format.itag) + " (YouTube)" : "—"],
+          ["Mode diminta", STREAM_MODE_LABELS[format.requested] || (format.local ? "Berkas lokal" : "Otomatis")],
+          ["Asal audio", format.local ? "Berkas lokal" : track.providerLabel || "YouTube"]
+        ];
+        if (fallback) {
+          formatRows.push([
+            "Catatan",
+            "Sumber tidak menyediakan FLAC; dipakai " + (format.codec || "format terbaik")
+          ]);
+        }
+
+        const playbackRows = [
+          ["Mesin", engineLabel(track)],
+          ["Status", status],
+          ["Posisi", position],
+          ["Buffer", buffer + "%"],
+          ["Volume", volume],
+          ["Kecepatan", (audio && audio.playbackRate ? audio.playbackRate : 1) + "×"],
+          ["Lagu", track.title || "—"],
+          ["Artis", track.artist || "—"]
+        ];
+
+        const outputRows = [
+          ["Perangkat keluaran", "Dikelola browser/OS"],
+          ["Resampling", format.sampleRate ? "Dikelola browser/OS" : "Tidak diketahui"],
+          ["Efek / DSP", "Tidak ada di aplikasi"],
+          ["Kanal keluaran", channelsText(format.channels) || "Mengikuti sumber"]
+        ];
+
+        const body =
+          '<div class="stats-panel">' +
+          statsSectionHTML("Format & tentang", formatRows) +
+          statsSectionHTML("Pemutaran", playbackRows) +
+          statsSectionHTML("Output", outputRows) +
+          '<p class="stats-note">Data perangkat keluaran dan resampling dikelola browser/sistem operasi sehingga tidak bisa dibaca aplikasi. Angka di atas adalah format audio yang benar-benar diterima pemutar.</p>' +
+          "</div>";
+
+        const title = track.title || "";
+        const artist = track.artist || "";
+        const subParts = title ? [title] : [];
+        if (artist && !title.toLowerCase().includes(artist.toLowerCase())) subParts.push(artist);
+        const modal = UI.openModal({
+          eyebrow: "Stats for nerds",
+          title: chipText(format) || "Format audio",
+          sub: subParts.join(" · "),
+          body,
+          width: "wide"
+        });
+        modal.setFooter(UI.makeButton("Tutup", { primary: true, onClick: () => modal.close() }));
+      });
   }
 
   function syncPlayerBar(playerState) {
@@ -860,13 +1010,14 @@
     }
     if (els.playerFormat) {
       const format = s.format || null;
-      const stats = !!L.getSetting("statsForNerds", false);
-      const text = hasTrack ? formatText(format, stats, true) : "";
+      const text = hasTrack ? chipText(format) : "";
       els.playerFormat.textContent = text;
       els.playerFormat.hidden = !text;
-      els.playerFormat.title = hasTrack
-        ? formatText(format, true, false) || "Format audio sedang dideteksi"
-        : "Format audio";
+      els.playerFormat.title = hasTrack ? formatTooltip(format) : "Info format audio";
+      els.playerFormat.setAttribute(
+        "aria-label",
+        text ? "Info format audio: " + text : "Info format audio"
+      );
     }
     if (els.playerArt) {
       const art = L.trackArt(track);
@@ -1030,13 +1181,17 @@
     }
     if (els.npFormat) {
       const format = s.format || null;
-      const stats = !!L.getSetting("statsForNerds", false);
-      const text = hasTrack ? formatText(format, stats, false) : "";
+      const text = hasTrack ? chipText(format) : "";
       els.npFormat.textContent = text;
       els.npFormat.hidden = !text;
-      els.npFormat.title = hasTrack
-        ? formatText(format, true, false) || "Format audio sedang dideteksi"
-        : "Format audio";
+      els.npFormat.title = hasTrack ? formatTooltip(format) : "Info format audio";
+      els.npFormat.setAttribute("aria-label", text ? "Info format audio: " + text : "Info format audio");
+    }
+    if (els.npFormatDetail) {
+      const stats = !!L.getSetting("statsForNerds", false);
+      const detail = hasTrack && stats ? formatDetailText(s.format) : "";
+      els.npFormatDetail.textContent = detail;
+      els.npFormatDetail.hidden = !detail;
     }
     if (els.npContext) {
       const label = s.context && s.context.label ? String(s.context.label) : "";
@@ -2224,6 +2379,8 @@
         state.lyricsSearchedTrackIds.delete(track.id);
         return requestLyrics(track, { force: true });
       }
+      case "stats-info":
+        return openStatsForNerds();
       case "set-stream-quality":
         return applyStreamQuality(actionEl.dataset.value || "high");
       case "set-download-quality":
@@ -3990,7 +4147,7 @@
       '<div class="settings-row__action">' +
       qualitySegmented("set-stream-quality", streamQuality, "", STREAM_FORMATS) +
       "</div></div>" +
-      '<div class="settings-row"><div class="settings-row__text"><div class="settings-row__title">Stats for nerds</div><div class="settings-row__sub">Tampilkan detail teknis audio (codec, bitrate, sample rate, kanal) dalam teks kecil di pemutar.</div></div>' +
+      '<div class="settings-row"><div class="settings-row__text"><div class="settings-row__title">Stats for nerds</div><div class="settings-row__sub">Tampilkan baris detail kecil di bawah judul pada tampilan Now Playing. Klik chip format di pemutar untuk membuka panel info lengkap.</div></div>' +
       '<div class="settings-row__action"><div class="segmented">' +
       '<button class="segmented__btn' +
       (statsForNerds ? "" : " is-active") +

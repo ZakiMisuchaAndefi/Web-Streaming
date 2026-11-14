@@ -107,6 +107,302 @@
     webm: "OPUS"
   };
 
+  /* ------------------------------------------------------------------------
+     Pembaca header berkas lokal
+     Elemen <audio> tidak memberi sample rate/kanal/bit depth, jadi beberapa
+     ratus byte pertama berkas dibaca langsung. Hasilnya di-cache per lagu.
+     ------------------------------------------------------------------------ */
+
+  const LOCAL_CONTAINERS = {
+    flac: "FLAC",
+    wav: "WAV",
+    wave: "WAV",
+    mp3: "MP3",
+    m4a: "MP4",
+    mp4: "MP4",
+    aac: "AAC",
+    ogg: "OGG",
+    oga: "OGG",
+    opus: "OGG",
+    aiff: "AIFF",
+    aif: "AIFF"
+  };
+
+  const headerCache = new Map();
+
+  function asciiAt(bytes, offset, length) {
+    let out = "";
+    for (let i = 0; i < length; i += 1) out += String.fromCharCode(bytes[offset + i] || 0);
+    return out;
+  }
+
+  function indexOfAscii(bytes, text, start) {
+    const first = text.charCodeAt(0);
+    for (let i = Math.max(0, start || 0); i <= bytes.length - text.length; i += 1) {
+      if (bytes[i] !== first) continue;
+      let match = true;
+      for (let j = 1; j < text.length; j += 1) {
+        if (bytes[i + j] !== text.charCodeAt(j)) {
+          match = false;
+          break;
+        }
+      }
+      if (match) return i;
+    }
+    return -1;
+  }
+
+  function readU16(bytes, offset) {
+    return (bytes[offset] << 8) | bytes[offset + 1];
+  }
+
+  function readU16LE(bytes, offset) {
+    return bytes[offset] | (bytes[offset + 1] << 8);
+  }
+
+  function readU32(bytes, offset) {
+    return (
+      ((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0
+    );
+  }
+
+  function readU32LE(bytes, offset) {
+    return (
+      (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0
+    );
+  }
+
+  // Angka floating point 80-bit (dipakai AIFF untuk sample rate).
+  function readExtended(bytes, offset) {
+    const exponent = ((bytes[offset] & 0x7f) << 8) | bytes[offset + 1];
+    if (!exponent) return 0;
+    let mantissa = 0;
+    for (let i = 0; i < 8; i += 1) mantissa = mantissa * 256 + bytes[offset + 2 + i];
+    return mantissa * Math.pow(2, exponent - 16383 - 63);
+  }
+
+  // "fLaC" + header blok metadata 4 byte + STREAMINFO 34 byte.
+  function parseFlacHeader(bytes) {
+    if (bytes.length < 26 || asciiAt(bytes, 0, 4) !== "fLaC") return null;
+    const b18 = bytes[18];
+    const b19 = bytes[19];
+    const b20 = bytes[20];
+    const b21 = bytes[21];
+    const sampleRate = (b18 << 12) | (b19 << 4) | (b20 >> 4);
+    const channels = ((b20 >> 1) & 0x07) + 1;
+    const bitDepth = (((b20 & 0x01) << 4) | (b21 >> 4)) + 1;
+    if (!sampleRate) return null;
+    return {
+      codec: "FLAC",
+      container: "FLAC",
+      mimeType: "audio/flac",
+      sampleRate,
+      channels,
+      bitDepth,
+      lossless: true
+    };
+  }
+
+  function parseWavHeader(bytes) {
+    if (bytes.length < 24 || asciiAt(bytes, 0, 4) !== "RIFF" || asciiAt(bytes, 8, 4) !== "WAVE") {
+      return null;
+    }
+    let offset = 12;
+    while (offset + 8 <= bytes.length) {
+      const id = asciiAt(bytes, offset, 4);
+      const size = readU32LE(bytes, offset + 4);
+      if (id === "fmt " && offset + 24 <= bytes.length) {
+        const channels = readU16LE(bytes, offset + 10);
+        const sampleRate = readU32LE(bytes, offset + 12);
+        const bitDepth = readU16LE(bytes, offset + 22);
+        if (!sampleRate) return null;
+        return {
+          codec: "WAV",
+          container: "WAV",
+          mimeType: "audio/wav",
+          sampleRate,
+          channels,
+          bitDepth,
+          lossless: true
+        };
+      }
+      offset += 8 + size + (size % 2);
+    }
+    return null;
+  }
+
+  function parseAiffHeader(bytes) {
+    if (bytes.length < 24 || asciiAt(bytes, 0, 4) !== "FORM") return null;
+    const form = asciiAt(bytes, 8, 4);
+    if (form !== "AIFF" && form !== "AIFC") return null;
+    let offset = 12;
+    while (offset + 8 <= bytes.length) {
+      const id = asciiAt(bytes, offset, 4);
+      const size = readU32(bytes, offset + 4);
+      if (id === "COMM" && offset + 26 <= bytes.length) {
+        const channels = readU16(bytes, offset + 8);
+        const bitDepth = readU16(bytes, offset + 14);
+        const sampleRate = Math.round(readExtended(bytes, offset + 16));
+        if (!sampleRate) return null;
+        return {
+          codec: form === "AIFC" ? "AIFF" : "AIFF",
+          container: "AIFF",
+          mimeType: "audio/aiff",
+          sampleRate,
+          channels,
+          bitDepth,
+          lossless: true
+        };
+      }
+      offset += 8 + size + (size % 2);
+    }
+    return null;
+  }
+
+  const MP3_BITRATES = {
+    mpeg1: {
+      1: [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448],
+      2: [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384],
+      3: [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320]
+    },
+    mpeg2: {
+      1: [0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256],
+      2: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+      3: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160]
+    }
+  };
+
+  function parseMp3Header(bytes) {
+    let offset = 0;
+    if (bytes.length > 10 && asciiAt(bytes, 0, 3) === "ID3") {
+      const size =
+        ((bytes[6] & 0x7f) << 21) |
+        ((bytes[7] & 0x7f) << 14) |
+        ((bytes[8] & 0x7f) << 7) |
+        (bytes[9] & 0x7f);
+      offset = 10 + size + (bytes[5] & 0x10 ? 10 : 0);
+    }
+    for (let i = offset; i + 4 <= bytes.length; i += 1) {
+      if (bytes[i] !== 0xff || (bytes[i + 1] & 0xe0) !== 0xe0) continue;
+      const versionBits = (bytes[i + 1] >> 3) & 0x03;
+      const layerBits = (bytes[i + 1] >> 1) & 0x03;
+      const bitrateIndex = (bytes[i + 2] >> 4) & 0x0f;
+      const rateIndex = (bytes[i + 2] >> 2) & 0x03;
+      if (versionBits === 1 || layerBits === 0 || bitrateIndex === 0 || bitrateIndex === 15) continue;
+      if (rateIndex === 3) continue;
+      const rates = versionBits === 3 ? [44100, 48000, 32000] : versionBits === 2 ? [22050, 24000, 16000] : [11025, 12000, 8000];
+      const table = versionBits === 3 ? MP3_BITRATES.mpeg1 : MP3_BITRATES.mpeg2;
+      // layerBits: 3 = Layer I, 2 = Layer II, 1 = Layer III.
+      const layer = 4 - layerBits;
+      const bitrate = (table[layer] || [])[bitrateIndex] || 0;
+      const channelMode = (bytes[i + 3] >> 6) & 0x03;
+      return {
+        codec: "MP3",
+        container: "MP3",
+        mimeType: "audio/mpeg",
+        sampleRate: rates[rateIndex],
+        channels: channelMode === 3 ? 1 : 2,
+        bitDepth: 0,
+        bitrate: bitrate * 1000,
+        lossless: false
+      };
+    }
+    return null;
+  }
+
+  function parseOggHeader(bytes) {
+    if (bytes.length < 32 || asciiAt(bytes, 0, 4) !== "OggS") return null;
+    const opusIndex = indexOfAscii(bytes, "OpusHead", 0);
+    if (opusIndex >= 0 && opusIndex + 10 < bytes.length) {
+      return {
+        codec: "OPUS",
+        container: "OGG",
+        mimeType: "audio/ogg",
+        // Opus selalu didekode pada 48 kHz.
+        sampleRate: 48000,
+        channels: bytes[opusIndex + 9] || 2,
+        bitDepth: 0,
+        lossless: false
+      };
+    }
+    const vorbisIndex = indexOfAscii(bytes, "vorbis", 0);
+    if (vorbisIndex > 0 && vorbisIndex + 20 < bytes.length) {
+      const sampleRate = readU32LE(bytes, vorbisIndex + 8);
+      if (!sampleRate) return null;
+      const bitrate = readU32LE(bytes, vorbisIndex + 19);
+      return {
+        codec: "VORBIS",
+        container: "OGG",
+        mimeType: "audio/ogg",
+        sampleRate,
+        channels: bytes[vorbisIndex + 7] || 2,
+        bitDepth: 0,
+        bitrate: bitrate > 0 ? bitrate : 0,
+        lossless: false
+      };
+    }
+    return null;
+  }
+
+  function parseAudioHeader(bytes) {
+    if (!bytes || bytes.length < 16) return null;
+    return (
+      parseFlacHeader(bytes) ||
+      parseWavHeader(bytes) ||
+      parseAiffHeader(bytes) ||
+      parseOggHeader(bytes) ||
+      parseMp3Header(bytes)
+    );
+  }
+
+  async function readLocalHeader(blob) {
+    const slice = blob.slice(0, Math.min(blob.size, 768 * 1024));
+    const buffer = await slice.arrayBuffer();
+    return parseAudioHeader(new Uint8Array(buffer));
+  }
+
+  function applyLocalHeader(track, id, info) {
+    if (!track || !info) return;
+    const base = localFormat(track);
+    const next = Object.assign({}, base, info, {
+      codec: info.codec || base.codec,
+      // Rata-rata dari ukuran berkas lebih akurat daripada bitrate frame
+      // pertama pada MP3 VBR; header hanya dipakai bila ukuran tidak ada.
+      bitrate: base.bitrate || info.bitrate,
+      local: true,
+      requested: "",
+      fallback: false
+    });
+    setFormat(next, id);
+  }
+
+  async function enrichLocalFormat(track, trackId) {
+    const id = trackId || (track && track.id);
+    if (!track || !id || track.provider === "youtube" || !AM.Library) return null;
+    if (headerCache.has(id)) {
+      applyLocalHeader(track, id, headerCache.get(id));
+      return headerCache.get(id);
+    }
+    if (typeof AM.Library.getAudioBlob !== "function") return null;
+    let blob = null;
+    try {
+      blob = await AM.Library.getAudioBlob(id);
+    } catch (error) {
+      return null;
+    }
+    if (!blob) return null;
+    let info = null;
+    try {
+      info = await readLocalHeader(blob);
+    } catch (error) {
+      info = null;
+    }
+    if (!info) return null;
+    headerCache.set(id, info);
+    applyLocalHeader(track, id, info);
+    return info;
+  }
+
   function localFormat(track) {
     if (!track) return null;
     const fileName = String(track.fileName || "");
@@ -123,12 +419,16 @@
     }
     const duration = Number(state.duration) || Number(track.duration) || 0;
     const bitrate = track.size && duration > 0 ? Math.round((track.size * 8) / duration) : 0;
+    const container = LOCAL_CONTAINERS[extension] || "";
     return {
       codec: codec || "AUDIO",
+      container,
+      mimeType: track.fileType || "",
       itag: 0,
       bitrate,
       sampleRate: 0,
       channels: 0,
+      bitDepth: 0,
       lossless: codec === "FLAC" || codec === "ALAC" || codec === "WAV" || codec === "AIFF",
       requested: "",
       fallback: false,
@@ -158,9 +458,15 @@
       (state.format &&
         next &&
         state.format.codec === next.codec &&
+        state.format.container === next.container &&
         state.format.itag === next.itag &&
         state.format.bitrate === next.bitrate &&
-        state.format.sampleRate === next.sampleRate);
+        state.format.sampleRate === next.sampleRate &&
+        state.format.channels === next.channels &&
+        state.format.bitDepth === next.bitDepth &&
+        state.format.lossless === next.lossless &&
+        state.format.requested === next.requested &&
+        state.format.fallback === next.fallback);
     state.format = next;
     if (!same) emit("format", { track: currentTrack(), format: next });
   }
@@ -175,6 +481,7 @@
     if (!track) return;
     if (track.provider !== "youtube") {
       setFormat(localFormat(track), id);
+      await enrichLocalFormat(track, id);
       return;
     }
     const sourceId = track.audioVideoId || track.sourceId;
@@ -183,6 +490,18 @@
       const format = await AM.Youtube.resolveFormat(sourceId);
       if (format) setFormat(format, id);
     }
+  }
+
+  // Pastikan metadata format sudah lengkap sebelum panel "Stats for nerds"
+  // dibuka (berkas lokal dibaca header-nya, YouTube memakai resolver).
+  async function ensureFormat(trackId) {
+    const id = trackId || state.currentId;
+    if (!id) return null;
+    const track = lookupTrack(id);
+    if (!track) return null;
+    if (track.provider !== "youtube") await enrichLocalFormat(track, id);
+    else await refreshFormat(id, state.loadToken);
+    return id === state.currentId ? state.format : null;
   }
 
   function maybeRecordHistory() {
@@ -1170,6 +1489,7 @@
     state.format = initialFormat(track);
     emit("trackchange", { track });
     emit("format", { track, format: state.format });
+    if (track.provider !== "youtube") enrichLocalFormat(track, trackId).catch(() => {});
     emit("statechange", getState());
     emit("queuechange", getQueue());
     emit("time", { currentTime: startAt, duration: state.duration, buffered: 0 });
@@ -1767,6 +2087,7 @@
     on,
     state,
     getState,
+    ensureFormat,
     currentTrack,
     play,
     pause,

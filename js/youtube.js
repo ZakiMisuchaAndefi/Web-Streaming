@@ -450,8 +450,21 @@
     const info = ITAG_INFO[Number(itag)] || {};
     const codec = info.codec || "";
     const lossless = codec === "FLAC";
+    const container = [139, 140, 141].includes(Number(itag))
+      ? "MP4"
+      : [249, 250, 251, 774].includes(Number(itag))
+        ? "WebM"
+        : "";
+    const mimeType =
+      container === "MP4"
+        ? 'audio/mp4; codecs="mp4a.40.2"'
+        : container === "WebM"
+          ? 'audio/webm; codecs="opus"'
+          : "";
     return {
       codec,
+      container,
+      mimeType,
       itag: Number(itag) || 0,
       bitrate: info.bitrate || 0,
       sampleRate: info.sampleRate || 0,

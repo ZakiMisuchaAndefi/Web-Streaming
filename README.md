@@ -162,8 +162,10 @@ Catatan:
 ### Format streaming
 
 - **Pengaturan → Audio → Format streaming** memilih format audio YouTube yang diambil resolver: **Hemat** (OPUS 70 kbps), **Standar** (OPUS 160 kbps), **Tinggi** (AAC/OPUS hingga 256 kbps sesuai sumber), atau **FLAC**.
-- **FLAC** hanya benar-benar dipakai bila sumbernya menyediakan audio lossless (mis. berkas FLAC lokal). YouTube tidak menyediakan FLAC, jadi untuk lagu YouTube opsi ini otomatis turun ke format terbaik yang tersedia; pemutar menampilkan `FLAC→OPUS` sebagai penanda fallback.
-- Pemutar selalu menampilkan codec yang benar-benar mengalir. Aktifkan **Stats for nerds** di Pengaturan untuk melihat bitrate, sample rate, jumlah kanal, dan itag dalam teks kecil di pemutar.
+- **FLAC** hanya benar-benar dipakai bila sumbernya menyediakan audio lossless (mis. berkas FLAC lokal). YouTube tidak menyediakan FLAC, jadi untuk lagu YouTube opsi ini otomatis turun ke format terbaik yang tersedia; chip format menampilkan `FLAC → OPUS` sebagai penanda fallback.
+- Pemutar selalu menampilkan chip format yang benar-benar mengalir, mis. `OPUS · 48 kHz` atau `FLAC · 44,1 kHz`. Untuk berkas lokal, sample rate, kanal, dan bit depth dibaca langsung dari header FLAC/WAV/AIFF/MP3/OGG sehingga angkanya akurat.
+- **Klik chip format** di pil pemutar atau Now Playing untuk membuka panel **Stats for nerds**: codec, wadah/MIME, bitrate, sample rate, kanal, bit depth, itag, mode yang diminta, mesin pemutaran, status, buffer, volume, dan catatan fallback. Data perangkat keluaran/resampling ditandai sebagai dikelola browser/OS karena tidak dapat dibaca aplikasi.
+- Aktifkan **Stats for nerds** di Pengaturan untuk menambahkan satu baris detail kecil di bawah judul Now Playing (bitrate, sample rate, kanal, bit depth, itag).
 - Jika format diubah saat lagu YouTube sedang diputar, aplikasi membersihkan cache audio dan memuat ulang lagu pada posisi yang sama.
 
 Umum:

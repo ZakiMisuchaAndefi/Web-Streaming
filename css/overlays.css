@@ -721,6 +721,79 @@
 }
 
 /* --------------------------------------------------------------------------
+   Stats for nerds — panel info format audio
+   -------------------------------------------------------------------------- */
+
+.stats-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.stats-section {
+  display: grid;
+  gap: 6px;
+}
+
+.stats-section__title {
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.stats-list {
+  margin: 0;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: minmax(108px, 36%) minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 12px;
+  border-top: 1px solid var(--divider);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.stats-row:first-child {
+  border-top: 0;
+}
+
+.stats-row:nth-child(odd) {
+  background: var(--bg-input);
+}
+
+.stats-row dt {
+  color: var(--text-3);
+}
+
+.stats-row dd {
+  margin: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.stats-note {
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+@media (max-width: 520px) {
+  .stats-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+    padding: 8px 10px;
+  }
+}
+
+/* --------------------------------------------------------------------------
    Pengaturan — gaya Vinyl (selaras panel Beranda/Cari)
    -------------------------------------------------------------------------- */
 
