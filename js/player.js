@@ -1541,6 +1541,7 @@
       state.streamSource = "lossless";
       state.losslessUrl = lossless.url;
       state.losslessMatch = lossless.match || null;
+      track.losslessRetried = false;
       if (lossless.id) track.losslessId = lossless.id;
       track.audioVideoId = track.audioVideoId || track.sourceId;
       track.audioRetryCount = 0;
@@ -1872,9 +1873,22 @@
     const token = state.loadToken;
     const trackId = state.currentId;
 
-    // Sumber FLAC gagal (katalog menolak, berkas rusak, atau CORS): kembali
-    // ke audio YouTube pada posisi yang sama alih-alih menghentikan lagu.
+    // Sumber FLAC gagal (katalog menolak, berkas rusak, atau koneksi CDN
+    // terputus): coba sekali lagi dengan URL yang sama sebelum kembali ke
+    // audio YouTube. Gangguan CDN sesaat tidak boleh langsung membuang FLAC.
     if (state.streamSource === "lossless" && track && track.provider === "youtube" && AM.Youtube) {
+      if (!track.losslessRetried && state.losslessUrl) {
+        track.losslessRetried = true;
+        audio.src = state.losslessUrl;
+        audio.load();
+        try {
+          await audio.play();
+          return;
+        } catch (error) {
+          if (state.loadToken !== token || state.currentId !== trackId) return;
+          reportPlayFailure(track, error);
+        }
+      }
       state.streamSource = "youtube";
       state.losslessUrl = "";
       state.losslessMatch = null;
