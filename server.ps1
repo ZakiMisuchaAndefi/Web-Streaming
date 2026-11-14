@@ -7,6 +7,7 @@
 #   GET /api/health              -> { "INNER_TUBE": true|false, "ffmpeg": true|false, "mp3": true|false }
 #   GET /api/search?q=KATA       -> { "items": [...], "alternates": [...] } (InnerTube)
 #   GET /api/resolve?id=VIDEO_ID&quality=high -> { "url": "...", "expires": <unix> }
+#   GET /api/lossless?title=...&artist=...   -> URL FLAC + detail format (katalog Tracks)
 #   GET /api/radio?id=VIDEO_ID   -> { "tracks": [ { id, title, artist, duration } ] }
 #   GET /api/download?id=VIDEO_ID&quality=high&title=... -> { "jobId": "...", "status": "running" }
 #   GET /api/download-status?job=JOB_ID -> { "status": "running|done|error", ... }
@@ -21,6 +22,7 @@ param(
 $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
 $rootDir = [System.IO.Path]::GetFullPath($Root)
 $script:INNER_TUBEPath = Join-Path $rootDir "scripts\innertube-cli.js"
+$script:LosslessPath = Join-Path $rootDir "scripts\lossless-cli.js"
 $script:nodePath = ""
 try {
   $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
@@ -30,6 +32,7 @@ $script:audioCache = @{}
 $script:audioFileCache = [ordered]@{}
 $script:radioCache = @{}
 $script:searchCache = @{}
+$script:losslessCache = @{}
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 $script:downloadDir = Join-Path $rootDir "downloads"
 $script:downloadRoot = [System.IO.Path]::GetFullPath($script:downloadDir).TrimEnd('\') + '\'
@@ -291,10 +294,11 @@ function Test-InnerTubeResolver {
     (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf)
 }
 
-function Invoke-InnertubeCli([string[]]$CliArgs, [int]$TimeoutMs) {
+function Invoke-InnertubeCli([string[]]$CliArgs, [int]$TimeoutMs, [string]$CliPath) {
+  $scriptPath = if ([string]::IsNullOrEmpty($CliPath)) { $script:INNER_TUBEPath } else { $CliPath }
   if ([string]::IsNullOrEmpty($script:nodePath) -or
-      -not (Test-Path -LiteralPath $script:INNER_TUBEPath -PathType Leaf)) {
-    return @{ Status = 503; Error = "Node.js atau scripts/innertube-cli.js tidak ditemukan" }
+      -not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+    return @{ Status = 503; Error = "Node.js atau skrip resolver tidak ditemukan" }
   }
 
   $process = $null
@@ -305,7 +309,7 @@ function Invoke-InnertubeCli([string[]]$CliArgs, [int]$TimeoutMs) {
     }
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
     $startInfo.FileName = $script:nodePath
-    $startInfo.Arguments = '"' + $script:INNER_TUBEPath + '" ' + ($quoted -join ' ')
+    $startInfo.Arguments = '"' + $scriptPath + '" ' + ($quoted -join ' ')
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
@@ -331,10 +335,10 @@ function Invoke-InnertubeCli([string[]]$CliArgs, [int]$TimeoutMs) {
     if ($process.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($stdout)) {
       $lines = @($stderr -split "`r?`n" | Where-Object { $_.Trim() -ne "" })
       $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1].Trim() } else { "Resolver gagal (kode $($process.ExitCode))" }
-      return @{ Status = 502; Error = $last }
+      return @{ Status = 502; Error = $last; ExitCode = $process.ExitCode }
     }
 
-    return @{ Status = 200; Output = $stdout.Trim() }
+    return @{ Status = 200; Output = $stdout.Trim(); ExitCode = 0 }
   } catch {
     return @{ Status = 502; Error = $_.Exception.Message }
   } finally {
@@ -770,6 +774,51 @@ try {
           } catch {
             if (-not $headOnly) {
               Send-Json $stream 502 "Bad Gateway" @{ error = "Layanan audio tidak tersedia saat ini." } $false
+            }
+          }
+        }
+      } elseif ($path -eq "/api/lossless" -and $method -eq "GET") {
+        $title = Get-QueryValue $rawQuery "title"
+        if ([string]::IsNullOrWhiteSpace($title)) {
+          Send-Json $stream 400 "Bad Request" @{ error = "Judul lagu kosong" } $false
+        } else {
+          $title = $title.Trim()
+          $artist = Get-QueryValue $rawQuery "artist"
+          if ($artist) { $artist = $artist.Trim() } else { $artist = "" }
+          $duration = Get-QueryValue $rawQuery "duration"
+          if ($duration) { $duration = $duration.Trim() } else { $duration = "0" }
+          $isrc = Get-QueryValue $rawQuery "isrc"
+          if ($isrc) { $isrc = $isrc.Trim() } else { $isrc = "" }
+
+          $cacheKey = ($title + "|" + $artist + "|" + $duration).ToLowerInvariant()
+          $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+          $cached = $script:losslessCache[$cacheKey]
+          if ($cached -and [int64]$cached.Expires -gt $now) {
+            if ($cached.Payload) {
+              Send-Json $stream 200 "OK" $cached.Payload $false
+            } else {
+              Send-Json $stream 404 "Not Found" @{ error = "Tidak ada versi lossless untuk lagu ini." } $false
+            }
+          } else {
+            $payload = @{ title = $title; artist = $artist; duration = $duration; isrc = $isrc } | ConvertTo-Json -Compress
+            $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($payload))
+            $result = Invoke-InnertubeCli @("resolve", $encoded) 20000 $script:LosslessPath
+            if ($result.Status -eq 200) {
+              $entry = $result.Output | ConvertFrom-Json
+              if ($script:losslessCache.Count -gt 200) { $script:losslessCache.Clear() }
+              $script:losslessCache[$cacheKey] = @{ Payload = $entry; Expires = ($now + 86400) }
+              Send-Json $stream 200 "OK" $entry $false
+            } elseif ($result.Status -eq 502 -and $result.ExitCode -eq 3) {
+              # Tidak ada versi FLAC: simpan hasil negatif sebentar agar tidak
+              # mencari ulang setiap kali lagu yang sama diputar.
+              if ($script:losslessCache.Count -gt 200) { $script:losslessCache.Clear() }
+              $script:losslessCache[$cacheKey] = @{ Payload = $null; Expires = ($now + 600) }
+              Send-Json $stream 404 "Not Found" @{ error = "Tidak ada versi lossless untuk lagu ini." } $false
+            } elseif ($result.Status -eq 504) {
+              Send-Json $stream 504 "Gateway Timeout" @{ error = "Pencarian lossless melebihi batas waktu." } $false
+            } else {
+              # Kegagalan sementara (katalog mati/timeout): jangan di-cache.
+              Send-Json $stream 502 "Bad Gateway" @{ error = "Katalog lossless tidak dapat diakses saat ini." } $false
             }
           }
         }

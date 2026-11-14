@@ -72,12 +72,13 @@ Repo ini juga siap di-deploy ke **Vercel** tanpa build step:
 | `GET /api/search?q=KATA` | Hasil pencarian YouTube lewat InnerTube (dipakai halaman Pencarian dan Beranda). |
 | `GET /api/resolve?id=VIDEO_ID&quality=high` | URL audio langsung dari YouTube (di-cache per video + kualitas); `force=1` mengambil URL baru untuk percobaan ulang. Dipakai saat aplikasi berjalan lokal. |
 | `GET /api/stream?id=VIDEO_ID&quality=high` | Menyajikan audio lewat byte-range agar player aplikasi bisa memutar dan seek; `force=1` mengambil URL baru saat mencoba ulang. Dipakai saat aplikasi berjalan lokal. |
+| `GET /api/lossless?title=...&artist=...&duration=...` | Mencari versi FLAC di katalog **Tracks** (monochrome.st) dan mengembalikan URL audio + detail format (sample rate, kanal, bit depth, bitrate). `404` berarti lagu tidak tersedia dalam FLAC. |
 | `GET /api/radio?id=VIDEO_ID` | Daftar lagu radio YouTube untuk lagu terkait. |
 | `GET /api/download?id=VIDEO_ID&quality=best&title=...` | Memulai job unduhan latar; mengembalikan `jobId`. |
 | `GET /api/download-status?job=JOB_ID` | Status job: `running`, `done`, atau `error`. |
 | `GET /api/download-file?job=JOB_ID` | Mengirim file hasil unduhan sebagai lampiran. |
 
-Saat di-deploy ke **Vercel**, endpoint yang sama dilayani fungsi Node di folder `api/` (tanpa server yang perlu menyala). Pencarian dan radio memakai InnerTube di fungsi serverless; audio YouTube diputar dari instance Invidious lewat browser.
+Saat di-deploy ke **Vercel**, endpoint yang sama dilayani fungsi Node di folder `api/` (tanpa server yang perlu menyala). Pencarian dan radio memakai InnerTube di fungsi serverless; audio YouTube diputar dari instance Invidious lewat browser. Pencarian FLAC memakai endpoint `/api/lossless` di serverless, lalu audio lossless diputar langsung dari katalog Tracks (mendukung Range, tanpa proxy).
 
 ## Beranda streaming
 
@@ -157,12 +158,13 @@ Catatan:
 - **`ffmpeg.exe` wajib ada** untuk konversi MP3. Letakkan di folder aplikasi, di `tools\ffmpeg\bin\ffmpeg.exe`, atau di `PATH`, lalu jalankan ulang server. Tanpa FFmpeg, tombol unduh menampilkan pesan yang jelas dan `/api/health` melaporkan `mp3: false`.
 - Server menjalankan resolver sebagai proses latar sehingga pemutaran tidak terhenti saat mengunduh. Setelah selesai, browser otomatis menawarkan file; jika tidak muncul, tekan **Simpan** pada notifikasi.
 - File disimpan di folder **`downloads/`** di folder aplikasi dan dinamai `Judul [ID].mp3`. Server membersihkan file unduhan yang lebih lama dari 7 hari dan mengabaikan file `.webm` lama.
-- **Lossless/FLAC tidak tersedia** karena sumber audio YouTube sudah berupa audio lossy. Tombol **Lossless** ditampilkan nonaktif dengan penjelasan ini.
+- **Unduhan selalu MP3**, bukan FLAC. Untuk streaming lossless, pilih format **FLAC** di Pengaturan (lihat bagian Format streaming).
 
 ### Format streaming
 
-- **Pengaturan → Audio → Format streaming** memilih format audio YouTube yang diambil resolver: **Hemat** (OPUS 70 kbps), **Standar** (OPUS 160 kbps), **Tinggi** (AAC/OPUS hingga 256 kbps sesuai sumber), atau **FLAC**.
-- **FLAC** hanya benar-benar dipakai bila sumbernya menyediakan audio lossless (mis. berkas FLAC lokal). YouTube tidak menyediakan FLAC, jadi untuk lagu YouTube opsi ini otomatis turun ke format terbaik yang tersedia; chip format menampilkan `FLAC → OPUS` sebagai penanda fallback.
+- **Pengaturan → Audio → Format streaming** memilih format audio yang diambil resolver: **Hemat** (OPUS 70 kbps), **Standar** (OPUS 160 kbps), **Tinggi** (AAC/OPUS hingga 256 kbps sesuai sumber), atau **FLAC**.
+- **FLAC** mencari versi lossless di katalog **Tracks** (`tracks.monochrome.st`, API yang dipakai Monochrome Music) lewat `/api/lossless`. Jika lagunya tersedia, audio FLAC diputar langsung dari katalog; sample rate, kanal, bit depth, dan bitrate dibaca dari header FLAC. Jika tidak tersedia (atau katalog sedang mati), aplikasi otomatis kembali ke audio YouTube terbaik dan chip menampilkan `FLAC → OPUS` sebagai penanda fallback.
+- Pencarian FLAC mencocokkan judul, artis, dan durasi, serta menolak versi live/acoustic/remix/karaoke bila lagu aslinya bukan versi itu. Instance katalog bisa diganti lewat env `LOSSLESS_API` saat deploy Vercel.
 - Pemutar selalu menampilkan chip format yang benar-benar mengalir, mis. `OPUS · 48 kHz` atau `FLAC · 44,1 kHz`. Untuk berkas lokal, sample rate, kanal, dan bit depth dibaca langsung dari header FLAC/WAV/AIFF/MP3/OGG sehingga angkanya akurat.
 - **Klik chip format** di pil pemutar atau Now Playing untuk membuka panel **Stats for nerds**: codec, wadah/MIME, bitrate, sample rate, kanal, bit depth, itag, mode yang diminta, mesin pemutaran, status, buffer, volume, dan catatan fallback. Data perangkat keluaran/resampling ditandai sebagai dikelola browser/OS karena tidak dapat dibaca aplikasi.
 - Aktifkan **Stats for nerds** di Pengaturan untuk menambahkan satu baris detail kecil di bawah judul Now Playing (bitrate, sample rate, kanal, bit depth, itag).
@@ -251,6 +253,8 @@ Pintasan selain `Esc` tidak aktif saat kamu sedang mengetik di kolom input.
 │   ├── _innertube.js   # klien InnerTube untuk pencarian
 │   ├── search.js       # GET /api/search
 │   ├── _lib.js         # resolver audio InnerTube dan helper radio
+│   ├── _lossless.js    # pencarian + pembacaan header FLAC (Tracks)
+│   ├── lossless.js     # GET /api/lossless
 │   ├── resolve.js      # GET /api/resolve
 │   ├── stream.js       # GET /api/stream
 │   ├── radio.js        # GET /api/radio
@@ -273,6 +277,7 @@ Pintasan selain `Esc` tidak aktif saat kamu sedang mengetik di kolom input.
     ├── demo.js         # generator perpustakaan demo
     ├── online.js       # sumber musik online (YouTube), cache & daftar Suka
     ├── youtube.js      # pencarian InnerTube + URL audio (proxy/Invidious/IFrame)
+    ├── lossless.js     # pencarian FLAC (Tracks) saat format streaming = FLAC
     ├── downloads.js    # unduhan MP3 YouTube lewat job server
     ├── home.js         # feed streaming untuk beranda
     ├── library.js      # state perpustakaan, impor, playlist, riwayat

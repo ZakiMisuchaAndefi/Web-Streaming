@@ -51,7 +51,7 @@
     { id: "low", label: "Hemat", hint: "OPUS 70 kbps · 48 kHz" },
     { id: "medium", label: "Standar", hint: "OPUS 160 kbps · 48 kHz" },
     { id: "high", label: "Tinggi", hint: "AAC/OPUS hingga 256 kbps" },
-    { id: "flac", label: "FLAC", hint: "Lossless bila sumber menyediakan" }
+    { id: "flac", label: "FLAC", hint: "Lossless via katalog Tracks" }
   ];
 
   const DOWNLOAD_QUALITIES = [
@@ -896,9 +896,10 @@
     }
   }
 
-  function engineLabel(track) {
+  function engineLabel(track, streamSource) {
     if (!track) return "Tidak aktif";
     if (track.provider !== "youtube") return "Berkas lokal (browser)";
+    if (streamSource === "lossless") return "Lossless langsung (Tracks)";
     const engine =
       AM.Youtube && typeof AM.Youtube.getStreamEngine === "function" ? AM.Youtube.getStreamEngine() : "";
     if (engine === "proxy") return "Proxy audio lokal";
@@ -936,7 +937,7 @@
           ["Bit depth", format.bitDepth ? format.bitDepth + "-bit" : format.local ? "Tidak tersedia" : "—"],
           ["Itag", format.itag ? String(format.itag) + " (YouTube)" : "—"],
           ["Mode diminta", STREAM_MODE_LABELS[format.requested] || (format.local ? "Berkas lokal" : "Otomatis")],
-          ["Asal audio", format.local ? "Berkas lokal" : track.providerLabel || "YouTube"]
+          ["Asal audio", format.local ? "Berkas lokal" : format.losslessSource ? "FLAC lossless (" + format.losslessSource + ")" : track.providerLabel || "YouTube"]
         ];
         if (fallback) {
           formatRows.push([
@@ -946,7 +947,7 @@
         }
 
         const playbackRows = [
-          ["Mesin", engineLabel(track)],
+          ["Mesin", engineLabel(track, s.streamSource)],
           ["Status", status],
           ["Posisi", position],
           ["Buffer", buffer + "%"],
@@ -4143,7 +4144,7 @@
       icon("moon") +
       "Atur</button></div></div></section>" +
       '<section class="settings-group"><h3 class="settings-group__title">Audio</h3>' +
-      '<div class="settings-row"><div class="settings-row__text"><div class="settings-row__title">Format streaming</div><div class="settings-row__sub">Hemat = OPUS 70 kbps · Standar = OPUS 160 kbps · Tinggi = hingga 256 kbps (AAC/OPUS) · FLAC = lossless bila sumber menyediakan, jika tidak otomatis turun ke format terbaik. Format yang benar-benar dipakai selalu tampil di pemutar.</div></div>' +
+      '<div class="settings-row"><div class="settings-row__text"><div class="settings-row__title">Format streaming</div><div class="settings-row__sub">Hemat = OPUS 70 kbps · Standar = OPUS 160 kbps · Tinggi = hingga 256 kbps (AAC/OPUS) · FLAC = lossless dari katalog Tracks (monochrome.st) bila lagunya tersedia; jika tidak, otomatis turun ke audio YouTube terbaik. Format yang benar-benar dipakai selalu tampil di pemutar.</div></div>' +
       '<div class="settings-row__action">' +
       qualitySegmented("set-stream-quality", streamQuality, "", STREAM_FORMATS) +
       "</div></div>" +
@@ -4250,9 +4251,13 @@
     if (AM.Youtube && typeof AM.Youtube.clearAudioCache === "function") {
       AM.Youtube.clearAudioCache();
     }
+    if (AM.Lossless && typeof AM.Lossless.clearCache === "function") {
+      AM.Lossless.clearCache();
+    }
     syncSettingsControls();
 
     const track = P.currentTrack();
+    if (track) track.losslessUnavailable = false;
     if (track && track.provider === "youtube" && P.state.isPlaying) {
       const position = P.state.currentTime || 0;
       try {

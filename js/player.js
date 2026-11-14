@@ -35,6 +35,8 @@
     pendingSeek: null,
     restoring: false,
     historyRecordedId: null,
+    streamSource: "",
+    losslessUrl: "",
     format: null
   };
 
@@ -479,6 +481,8 @@
     if (id !== state.currentId) return;
     const track = lookupTrack(id);
     if (!track) return;
+    // Format lossless sudah diisi saat audio diambil dari katalog FLAC.
+    if (state.streamSource === "lossless") return;
     if (track.provider !== "youtube") {
       setFormat(localFormat(track), id);
       await enrichLocalFormat(track, id);
@@ -1264,6 +1268,20 @@
 
   function prefetchAudio(track) {
     if (!track || track.provider !== "youtube" || !track.sourceId) return;
+    if (
+      AM.Lossless &&
+      typeof AM.Lossless.resolve === "function" &&
+      typeof AM.Lossless.shouldUse === "function" &&
+      AM.Lossless.shouldUse() &&
+      !track.losslessUnavailable
+    ) {
+      try {
+        AM.Lossless.resolve(track).catch(() => {});
+      } catch (error) {
+        /* Abaikan. */
+      }
+      return;
+    }
     if (!AM.Youtube || typeof AM.Youtube.resolveAudio !== "function") return;
     try {
       AM.Youtube.resolveAudio(track.sourceId).catch(() => {});
@@ -1477,6 +1495,8 @@
     const token = state.loadToken;
     state.loadingTrackId = trackId;
     state.loadedTrackId = null;
+    state.streamSource = "";
+    state.losslessUrl = "";
     state.pendingPlay = !!autoplay;
     audio.pause();
     audio.removeAttribute("src");
@@ -1496,6 +1516,56 @@
     if (!state.restoring) writeSnapshot(true);
 
     state.isPlaying = false;
+
+    // Format FLAC: cari versi lossless di katalog Tracks lebih dulu. Bila
+    // tidak ketemu, alur YouTube di bawah tetap berjalan seperti biasa.
+    let lossless = null;
+    if (
+      track.provider === "youtube" &&
+      !track.losslessUnavailable &&
+      AM.Lossless &&
+      typeof AM.Lossless.resolve === "function" &&
+      AM.Lossless.shouldUse()
+    ) {
+      try {
+        lossless = await AM.Lossless.resolve(track);
+      } catch (error) {
+        lossless = null;
+      }
+      if (token !== state.loadToken || state.currentId !== trackId) return;
+    }
+
+    if (lossless && lossless.url) {
+      state.streamSource = "lossless";
+      state.losslessUrl = lossless.url;
+      if (lossless.id) track.losslessId = lossless.id;
+      track.audioVideoId = track.audioVideoId || track.sourceId;
+      track.audioRetryCount = 0;
+      track.audioRetrying = false;
+      track.iframeTried = false;
+      audio.src = lossless.url;
+      audio.load();
+      state.loadedTrackId = trackId;
+      state.loadingTrackId = null;
+      if (lossless.format) setFormat(lossless.format, trackId);
+      updateMediaSession(track);
+      const playRequest = state.pendingPlay ? audio.play() : null;
+      if (playRequest) {
+        try {
+          await playRequest;
+        } catch (error) {
+          if (token !== state.loadToken || state.currentId !== trackId) return;
+          state.pendingPlay = false;
+          reportPlayFailure(track, error);
+          state.isPlaying = false;
+          emit("statechange", getState());
+        }
+      }
+      if (token === state.loadToken && state.currentId === trackId) {
+        prepareUpNext(track, token);
+      }
+      return;
+    }
 
     if (track.provider === "youtube" && AM.Youtube) {
       const sourceId = track.audioVideoId || track.sourceId;
@@ -1518,6 +1588,7 @@
       }
 
       // Start the media request in the user gesture before the server resolves the stream.
+      state.streamSource = "youtube";
       track.audioVideoId = sourceId;
       track.audioRetryCount = 0;
       track.audioRetrying = false;
@@ -1566,6 +1637,7 @@
 
     if (token !== state.loadToken || state.currentId !== trackId) return;
 
+    state.streamSource = track.online ? "online" : "local";
     audio.src = url;
     audio.load();
     state.loadedTrackId = trackId;
@@ -1646,6 +1718,8 @@
     state.isPlaying = false;
     state.duration = 0;
     state.currentTime = 0;
+    state.streamSource = "";
+    state.losslessUrl = "";
     state.pendingSeek = null;
     finishRestore();
     clearSnapshot();
@@ -1777,6 +1851,7 @@
       currentTime: state.currentTime,
       queueLength: state.queue.length,
       context: state.context,
+      streamSource: state.streamSource,
       format: state.format
     };
   }
@@ -1791,6 +1866,34 @@
     const track = currentTrack();
     const token = state.loadToken;
     const trackId = state.currentId;
+
+    // Sumber FLAC gagal (katalog menolak, berkas rusak, atau CORS): kembali
+    // ke audio YouTube pada posisi yang sama alih-alih menghentikan lagu.
+    if (state.streamSource === "lossless" && track && track.provider === "youtube" && AM.Youtube) {
+      state.streamSource = "youtube";
+      state.losslessUrl = "";
+      track.losslessUnavailable = true;
+      const sourceId = track.audioVideoId || track.sourceId;
+      const streamUrl =
+        typeof AM.Youtube.audioStreamUrl === "function" ? AM.Youtube.audioStreamUrl(sourceId) : "";
+      if (streamUrl) {
+        const shouldPlay = state.pendingPlay || state.isPlaying;
+        audio.src = streamUrl;
+        audio.load();
+        if (typeof AM.Youtube.formatFor === "function") {
+          setFormat(AM.Youtube.formatFor(sourceId), trackId);
+        }
+        if (shouldPlay) {
+          try {
+            await audio.play();
+          } catch (error) {
+            if (state.loadToken !== token || state.currentId !== trackId) return;
+            reportPlayFailure(track, error);
+          }
+        }
+        return;
+      }
+    }
 
     if (!track || track.provider !== "youtube") {
       emit("error", {
