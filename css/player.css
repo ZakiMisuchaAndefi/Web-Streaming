@@ -1407,6 +1407,7 @@ body.has-now-playing {
 
 .now-playing__times .time {
   width: auto;
+  flex: none;
   color: var(--ink-2);
   font-size: 11px;
   font-weight: 500;
@@ -1524,30 +1525,25 @@ body.has-now-playing {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: min(100%, 248px);
-  flex: none;
+  gap: 6px;
+  width: auto;
+  max-width: 240px;
+  min-width: 0;
+  flex: 1 1 auto;
   transform: none;
 }
 
 .now-playing__mute {
   width: 24px;
   height: 24px;
+  flex: none;
   color: var(--ink);
   opacity: 0.45;
 }
 
 .now-playing__mute .icon {
-  width: 16px;
-  height: 16px;
-}
-
-.now-playing__volume-max {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  color: var(--ink);
-  opacity: 0.45;
+  width: 15px;
+  height: 15px;
 }
 
 .now-playing__mute.is-active {
@@ -1557,7 +1553,9 @@ body.has-now-playing {
 .now-playing__volume-slider,
 .now-playing .now-playing__volume-slider {
   display: flex;
-  width: min(184px, 40vw);
+  width: auto;
+  height: 24px;
+  min-width: 48px;
   margin-right: 0;
   flex: 1 1 auto;
 }
@@ -1815,7 +1813,7 @@ body.has-now-playing {
 
 .now-playing--lyrics .now-playing__volume {
   align-self: center;
-  width: min(100%, 240px);
+  width: auto;
 }
 
 /* Penyesuaian layar ------------------------------------------------------- */
@@ -2033,16 +2031,6 @@ body.has-now-playing {
     height: 64px;
   }
 
-  .now-playing__volume {
-    width: 100%;
-    margin-top: 14px;
-  }
-
-  .now-playing__volume-slider,
-  .now-playing .now-playing__volume-slider {
-    width: min(252px, 70vw);
-  }
-
   /* Lirik di ponsel: pemutar mengecil lalu lirik mengalir di bawahnya. */
   .now-playing--lyrics .now-playing__stage {
     grid-template-columns: minmax(0, 1fr);
@@ -2092,12 +2080,6 @@ body.has-now-playing {
   .now-playing--lyrics .now-playing__play {
     width: 52px;
     height: 52px;
-  }
-
-  .now-playing--lyrics .now-playing__volume {
-    grid-column: 1 / -1;
-    width: 100%;
-    margin-top: 10px;
   }
 
   .now-playing__lyrics {
@@ -2174,10 +2156,6 @@ body.has-now-playing {
     margin-top: clamp(6px, 1.3vh, 10px);
     margin-bottom: clamp(8px, 1.6vh, 12px);
   }
-
-  .now-playing--lyrics .now-playing__volume {
-    margin-top: 0;
-  }
 }
 
 @media (min-width: 621px) and (max-height: 700px) {
@@ -2203,6 +2181,178 @@ body.has-now-playing {
   .now-playing__details {
     width: min(100%, 240px);
     min-height: 56px;
+  }
+}
+
+/* Layar pendek: volume sudah menyatu dengan baris waktu, jadi ruang
+   vertikal dipakai untuk mengecilkan sampul agar tidak ada kontrol terpotong. */
+@media (min-width: 621px) and (max-height: 620px) {
+  .now-playing:not(.now-playing--lyrics) .now-playing__art {
+    width: clamp(120px, min(38.2vh, calc(100vh - 370px)), 230px);
+  }
+}
+
+/* Layar sangat pendek (lanskap ponsel atau jendela pendek): sampul pindah ke
+   kiri, kontrol ke kanan. Volume dan transport selalu terlihat tanpa scroll. */
+@media (min-width: 621px) and (max-height: 580px) {
+  .now-playing:not(.now-playing--lyrics) .now-playing__stage {
+    grid-template-columns: minmax(0, 720px) minmax(0, 0px);
+    align-content: center;
+    align-items: center;
+    padding-top: 0;
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__main {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    align-items: center;
+    column-gap: clamp(18px, 3vw, 36px);
+    width: min(100%, 720px);
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__art {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    width: clamp(140px, min(52vh, 34vw), 230px);
+    max-width: 100%;
+    margin: 0;
+    align-self: center;
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__details {
+    grid-column: 2;
+    width: 100%;
+    min-height: 0;
+    margin-top: 0;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__titles {
+    justify-items: start;
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__title {
+    font-size: clamp(20px, 2.6vw, 25px);
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__artist {
+    font-size: 13px;
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__actions {
+    position: static;
+    flex: none;
+    transform: none;
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__timeline {
+    grid-column: 2;
+    width: 100%;
+    margin-top: clamp(8px, 1.8vh, 14px);
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__controls {
+    grid-column: 2;
+    width: 100%;
+    margin: clamp(8px, 2vh, 14px) 0 0;
+    gap: clamp(12px, 2vw, 22px);
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__play {
+    width: 56px;
+    height: 56px;
+  }
+
+  .now-playing:not(.now-playing--lyrics) .now-playing__play .icon {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+/* Lirik di layar pendek: rapatkan kolom kiri supaya volume tetap di atas lipatan. */
+@media (min-width: 621px) and (max-height: 560px) {
+  .now-playing--lyrics .now-playing__stage {
+    padding-top: clamp(8px, 2.4vh, 18px);
+  }
+
+  .now-playing--lyrics .now-playing__art {
+    width: clamp(100px, 28vh, 190px);
+  }
+
+  .now-playing--lyrics .now-playing__details {
+    min-height: 0;
+    margin-top: clamp(8px, 1.6vh, 14px);
+  }
+
+  .now-playing--lyrics .now-playing__timeline {
+    margin-top: clamp(6px, 1.2vh, 10px);
+  }
+
+  .now-playing--lyrics .now-playing__controls {
+    margin-top: clamp(8px, 1.6vh, 12px);
+    margin-bottom: 0;
+  }
+
+  .now-playing--lyrics .now-playing__play {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+/* Ponsel dengan tinggi terbatas: tombol lirik pindah ke header agar bar bawah
+   tidak menutupi kontrol transport dan volume. */
+@media (max-width: 620px) and (max-height: 700px) {
+  .now-playing__stage {
+    padding-bottom: 16px;
+  }
+
+  .now-playing__head-btn#npLyrics {
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: 40px;
+    height: 40px;
+    border-color: var(--border-glass);
+    background: var(--glass-1);
+  }
+
+  .now-playing__head-btn#npLyrics span {
+    display: none;
+  }
+
+  .now-playing__art {
+    width: min(100%, clamp(160px, 36vh, 240px));
+  }
+}
+
+/* Ponsel pendek: sampul mengecil agar kontrol dan volume tidak terpotong. */
+@media (max-width: 620px) and (max-height: 580px) {
+  .now-playing__art {
+    width: min(100%, clamp(160px, 34vh, 220px));
+  }
+}
+
+@media (max-width: 620px) and (max-height: 520px) {
+  .now-playing__art {
+    width: min(100%, clamp(110px, 24vh, 200px));
+  }
+
+  .now-playing__details {
+    min-height: 52px;
+  }
+
+  .now-playing__controls {
+    margin-top: 10px;
+  }
+}
+
+/* Lirik di lanskap sangat pendek: fokus ke teks, sampul disembunyikan. */
+@media (min-width: 621px) and (max-height: 380px) {
+  .now-playing--lyrics .now-playing__art {
+    display: none;
   }
 }
 

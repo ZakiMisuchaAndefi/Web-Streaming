@@ -327,6 +327,17 @@
             </div>
             <div class="now-playing__times">
               <span class="time" id="npCurTime">0:00</span>
+              <div class="now-playing__volume">
+                <button class="icon-btn now-playing__mute" id="npMute" type="button" title="Bisukan" aria-label="Bisukan">
+                  <svg class="icon" aria-hidden="true"><use href="#i-volume-2"></use></svg>
+                </button>
+                <div class="volume now-playing__volume-slider" id="npVolume" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="80" aria-valuetext="80%">
+                  <div class="volume__rail">
+                    <div class="volume__fill" id="npVolumeFill"></div>
+                    <div class="volume__thumb" id="npVolumeThumb"></div>
+                  </div>
+                </div>
+              </div>
               <span class="time" id="npDurTime">0:00</span>
             </div>
           </div>
@@ -348,19 +359,6 @@
               <svg class="icon" aria-hidden="true"><use href="#i-repeat"></use></svg>
               <span class="now-playing__repeat-one" id="npRepeatOne" hidden>1</span>
             </button>
-          </div>
-
-          <div class="now-playing__volume">
-            <button class="icon-btn now-playing__mute" id="npMute" type="button" title="Bisukan" aria-label="Bisukan">
-              <svg class="icon" aria-hidden="true"><use href="#i-volume-2"></use></svg>
-            </button>
-            <div class="volume now-playing__volume-slider" id="npVolume" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="80" aria-valuetext="80%">
-              <div class="volume__rail">
-                <div class="volume__fill" id="npVolumeFill"></div>
-                <div class="volume__thumb" id="npVolumeThumb"></div>
-              </div>
-            </div>
-            <svg class="icon now-playing__volume-max" aria-hidden="true"><use href="#i-volume-2"></use></svg>
           </div>
         </div>
 
